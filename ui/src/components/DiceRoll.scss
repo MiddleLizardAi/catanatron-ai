@@ -1,9 +1,8 @@
 .dice-roll {
   position: fixed;
-  top: 76px;
-  left: 50%;
+  top: 86px;
+  right: 18px;
   z-index: 1102;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -97,7 +96,13 @@
 
 @media (min-width: 960px) {
   .dice-roll {
-    left: calc(50% - 20px);
+    right: 300px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .dice-roll {
+    right: 380px;
   }
 }
 
