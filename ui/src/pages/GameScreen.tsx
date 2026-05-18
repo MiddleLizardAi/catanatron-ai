@@ -17,6 +17,7 @@ import { dispatchSnackbar } from "../components/Snackbar";
 import { getHumanColor } from "../utils/stateUtils";
 import AnalysisBox from "../components/AnalysisBox";
 import { Divider } from "@mui/material";
+import JoinLinks from "../components/JoinLinks";
 
 const ROBOT_THINKING_TIME = 300;
 
@@ -87,6 +88,7 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   return (
     <main>
       <h1 className="logo">Catanatron</h1>
+      {gameId ? <JoinLinks gameId={gameId} gameState={state.gameState} /> : null}
       <ZoomableBoard replayMode={replayMode} />
       <ActionsToolbar isBotThinking={isBotThinking} replayMode={replayMode} />
       <LeftDrawer />
