@@ -137,12 +137,11 @@ def post_action_endpoint(game_id):
             mimetype="application/json",
         )
 
-    # TODO: remove `or body_is_empty` when fully implement actions in FE
     body_is_empty = (not request.data) or request.json is None or request.json == {}
-    if game.state.current_player().is_bot or body_is_empty:
+    if game.state.current_player().is_bot:
         game.play_tick()
         upsert_game_state(game)
-    else:
+    elif not body_is_empty:
         action = action_from_json(request.json)
         game.execute(action)
         upsert_game_state(game)

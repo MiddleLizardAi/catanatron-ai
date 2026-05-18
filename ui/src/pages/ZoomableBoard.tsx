@@ -14,16 +14,17 @@ import { useParams } from "react-router";
 import ACTIONS from "../actions";
 import Board from "./Board";
 import type { GameAction, TileCoordinate } from "../utils/api.types";
+import { canLocalPlayerAct } from "../utils/localPlayer";
 
 /**
  * Returns object representing actions to be taken if click on node.
  * @returns {3 => ["BLUE", "BUILD_CITY", 3], ...}
  */
-function buildNodeActions(state: CatanState) {
+function buildNodeActions(state: CatanState, search: string) {
   if (!state.gameState)
     throw new Error("GameState is not ready!");
 
-  if (!isPlayersTurn(state.gameState)) {
+  if (!isPlayersTurn(state.gameState) || !canLocalPlayerAct(state.gameState, search)) {
     return {};
   }
 
@@ -54,10 +55,10 @@ function buildNodeActions(state: CatanState) {
   return nodeActions;
 }
 
-function buildEdgeActions(state: CatanState) {
+function buildEdgeActions(state: CatanState, search: string) {
   if (!state.gameState)
     throw new Error("GameState is not ready!");
-  if (!isPlayersTurn(state.gameState)) {
+  if (!isPlayersTurn(state.gameState) || !canLocalPlayerAct(state.gameState, search)) {
     return {};
   }
 
@@ -145,8 +146,8 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
     [state.isMovingRobber]
   );
 
-  const nodeActions = replayMode ? {} : buildNodeActions(state);
-  const edgeActions = replayMode ? {} : buildEdgeActions(state);
+  const nodeActions = replayMode ? {} : buildNodeActions(state, window.location.search);
+  const edgeActions = replayMode ? {} : buildEdgeActions(state, window.location.search);
   const robberCoordinates = new Set(
     state.isMovingRobber
       ? gameState.current_playable_actions

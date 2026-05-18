@@ -193,6 +193,27 @@ def test_post_action_bot_turn(client):
     assert len(data_after["action_records"]) > len(data_before["action_records"])
 
 
+def test_empty_post_does_not_advance_human_turn(client):
+    post_response = client.post(
+        "/api/games",
+        json={"players": [{"type": "HUMAN", "name": "Dmytro", "color": "RED"}]},
+    )
+    assert post_response.status_code == 200
+    game_id = json.loads(post_response.data)["game_id"]
+
+    data_before = json.loads(
+        client.get(f"/api/games/{game_id}/states/latest").data
+    )
+    response = client.post(f"/api/games/{game_id}/actions", json={})
+    assert response.status_code == 200
+    data_after = json.loads(response.data)
+
+    assert data_after["state_index"] == data_before["state_index"]
+    assert data_after["current_color"] == data_before["current_color"]
+    assert data_after["current_prompt"] == data_before["current_prompt"]
+    assert data_after["action_records"] == data_before["action_records"]
+
+
 def test_repeated_bot_actions_advance_latest_state(client):
     """Latest state should keep advancing across persisted bot turns."""
     post_response = client.post("/api/games", json={"players": ["RANDOM", "RANDOM"]})
