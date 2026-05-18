@@ -135,7 +135,7 @@
 .city {
   position: relative;
   width: 112%;
-  height: 112%;
+  height: 118%;
 }
 
 .city-block {
@@ -147,17 +147,19 @@
 }
 
 .city-block--base {
-  right: 4%;
-  bottom: 4%;
-  width: 78%;
-  height: 78%;
+  left: 50%;
+  bottom: 0;
+  width: 82%;
+  height: 58%;
+  transform: translateX(-50%);
 }
 
 .city-block--top {
-  left: 4%;
+  left: 50%;
   top: 2%;
-  width: 54%;
-  height: 54%;
+  width: 52%;
+  height: 46%;
+  transform: translateX(-50%);
 }
 
 .BLUE.city .city-block {
