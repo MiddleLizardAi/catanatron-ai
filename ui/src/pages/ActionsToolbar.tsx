@@ -528,9 +528,9 @@ function OptionsButton({
         className="action-popover"
         open={open}
         anchorEl={anchorRef.current}
+        placement="top"
         role={undefined}
         transition
-        disablePortal
       >
         {({ TransitionProps, placement }) => (
           <Grow

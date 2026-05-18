@@ -1,26 +1,32 @@
 import { useEffect, useState } from "react";
 
-import die1 from "../assets/dice/die.face.1.fill.svg";
-import die2 from "../assets/dice/die.face.2.fill.svg";
-import die3 from "../assets/dice/die.face.3.fill.svg";
-import die4 from "../assets/dice/die.face.4.fill.svg";
-import die5 from "../assets/dice/die.face.5.fill.svg";
-import die6 from "../assets/dice/die.face.6.fill.svg";
-import die1Red from "../assets/dice/die.face.1.red.svg";
-import die2Red from "../assets/dice/die.face.2.red.svg";
-import die3Red from "../assets/dice/die.face.3.red.svg";
-import die4Red from "../assets/dice/die.face.4.red.svg";
-import die5Red from "../assets/dice/die.face.5.red.svg";
-import die6Red from "../assets/dice/die.face.6.red.svg";
-
 import "./DiceRoll.scss";
 
-const lightDice = [die1, die2, die3, die4, die5, die6];
-const redDice = [die1Red, die2Red, die3Red, die4Red, die5Red, die6Red];
+const PIP_POSITIONS = {
+  1: ["center"],
+  2: ["top-left", "bottom-right"],
+  3: ["top-left", "center", "bottom-right"],
+  4: ["top-left", "top-right", "bottom-left", "bottom-right"],
+  5: ["top-left", "top-right", "center", "bottom-left", "bottom-right"],
+  6: ["top-left", "top-right", "middle-left", "middle-right", "bottom-left", "bottom-right"],
+} as const;
 
 type DiceRollProps = {
   values?: [number, number] | null;
 };
+
+function Die({ color, value, rolling }: { color: "yellow" | "red"; value: number; rolling: boolean }) {
+  return (
+    <span
+      aria-label={`${color} die: ${value}`}
+      className={`dice-roll__die dice-roll__die--${color}${rolling ? " rolling" : ""}`}
+    >
+      {PIP_POSITIONS[value as keyof typeof PIP_POSITIONS].map((position) => (
+        <span className={`dice-roll__pip dice-roll__pip--${position}`} key={position} />
+      ))}
+    </span>
+  );
+}
 
 export default function DiceRoll({ values }: DiceRollProps) {
   const [isRolling, setIsRolling] = useState(false);
@@ -44,16 +50,8 @@ export default function DiceRoll({ values }: DiceRollProps) {
   return (
     <div className="dice-roll" aria-label={`Dice roll ${firstDie + secondDie}`}>
       <span className="dice-roll__label">Roll {firstDie + secondDie}</span>
-      <img
-        src={lightDice[firstDie - 1]}
-        alt={`First die: ${firstDie}`}
-        className={isRolling ? "dice-roll__die rolling" : "dice-roll__die"}
-      />
-      <img
-        src={redDice[secondDie - 1]}
-        alt={`Second die: ${secondDie}`}
-        className={isRolling ? "dice-roll__die rolling" : "dice-roll__die"}
-      />
+      <Die color="yellow" value={firstDie} rolling={isRolling} />
+      <Die color="red" value={secondDie} rolling={isRolling} />
     </div>
   );
 }
