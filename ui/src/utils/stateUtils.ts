@@ -18,3 +18,9 @@ export function getHumanColor(gameState: GameState): Color {
     (color) => !gameState.bot_colors.includes(color)
   ) as Color;
 }
+
+export function getHumanColors(gameState: GameState): Color[] {
+  return gameState.colors.filter(
+    (color) => !gameState.bot_colors.includes(color)
+  );
+}

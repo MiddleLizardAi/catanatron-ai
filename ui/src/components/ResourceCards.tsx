@@ -5,8 +5,43 @@ import { type Card } from "../utils/api.types";
 // TODO - do we need to split the SCSS for this component?
 import "./PlayerStateBox.scss";
 
-export default function ResourceCards({ playerState, playerKey }: { playerState: PlayerState; playerKey: string }) {
+function totalCards(playerState: PlayerState, playerKey: string): number {
+  return [
+    "WOOD",
+    "BRICK",
+    "SHEEP",
+    "WHEAT",
+    "ORE",
+    "VICTORY_POINT",
+    "KNIGHT",
+    "MONOPOLY",
+    "YEAR_OF_PLENTY",
+    "ROAD_BUILDING",
+  ].reduce((total, card) => total + (playerState[`${playerKey}_${card}_IN_HAND`] || 0), 0);
+}
+
+export default function ResourceCards({
+  playerState,
+  playerKey,
+  visible = true,
+}: {
+  playerState: PlayerState;
+  playerKey: string;
+  visible?: boolean;
+}) {
   const amount = (card: Card) => playerState[`${playerKey}_${card}_IN_HAND`];
+
+  if (!visible) {
+    const count = totalCards(playerState, playerKey);
+    return (
+      <div className="resource-cards hidden-hand" title="Hidden hand">
+        <div className="hidden-cards center-text card">
+          <Paper>{count}</Paper>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="resource-cards" title="Resource Cards">
       {amount("WOOD") !== 0 && (

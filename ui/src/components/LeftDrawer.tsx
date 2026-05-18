@@ -12,10 +12,12 @@ import ACTIONS from "../actions";
 import { playerKey } from "../utils/stateUtils";
 import { type GameState } from "../utils/api.types";
 import { isTabOrShift, type InteractionEvent } from "../utils/events";
+import { localHumanColor } from "../utils/localPlayer";
 
 import "./LeftDrawer.scss";
 
 function DrawerContent({ gameState }: { gameState: GameState }) {
+  const viewerColor = localHumanColor(gameState, window.location.search);
   const playerSections = gameState.colors.map((color) => {
     const key = playerKey(gameState, color);
     return (
@@ -24,6 +26,7 @@ function DrawerContent({ gameState }: { gameState: GameState }) {
           playerState={gameState.player_state}
           playerKey={key}
           color={color}
+          showHand={viewerColor === color}
         />
         <Divider />
       </React.Fragment>

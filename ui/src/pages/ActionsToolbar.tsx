@@ -33,6 +33,7 @@ import { getHumanColor, playerKey } from "../utils/stateUtils";
 import { postAction } from "../utils/apiClient";
 import { humanizeTradeAction } from "../utils/promptUtils";
 import { useDiscardBatchSubmission } from "../hooks/useDiscardBatchSubmission";
+import { canLocalPlayerAct, localHumanColor } from "../utils/localPlayer";
 
 import "./ActionsToolbar.scss";
 import { useSnackbar } from "notistack";
@@ -89,7 +90,7 @@ function PlayButtons() {
       .filter((action) => action[1].startsWith("PLAY"))
       .map((action) => action[1]),
   );
-  const humanColor = getHumanColor(gameState);
+  const humanColor = localHumanColor(gameState, window.location.search) ?? getHumanColor(gameState);
   const discardActionType =
     gameState.current_playable_actions.find(
       (action) => action[1] === "DISCARD_RESOURCE",
@@ -286,6 +287,13 @@ function PlayButtons() {
   }, [dispatch]);
   const rollAction = carryOutAction([humanColor, "ROLL", null]);
   const endTurnAction = carryOutAction([humanColor, "END_TURN", null]);
+
+  useEffect(() => {
+    if (isRoll && humanColor === gameState.current_color) {
+      rollAction();
+    }
+  }, [gameState.current_color, humanColor, isRoll, rollAction]);
+
   return (
     <>
       <OptionsButton
@@ -329,7 +337,7 @@ function PlayButtons() {
               : isPlayingYearOfPlenty || isPlayingMonopoly
                 ? handleOpenResourceSelector
                 : isRoll
-                  ? rollAction
+                  ? undefined
                   : endTurnAction
         }
       >
@@ -340,7 +348,7 @@ function PlayButtons() {
             : isPlayingYearOfPlenty || isPlayingMonopoly
               ? "SELECT"
               : isRoll
-                ? "ROLL"
+                ? "ROLLING"
                 : "END"}
       </Button>
       <ResourceSelector
@@ -394,7 +402,8 @@ export default function ActionsToolbar({
   }, [dispatch]);
 
   const botsTurn = gameState.bot_colors.includes(gameState.current_color);
-  const humanColor = getHumanColor(gameState);
+  const humanColor = localHumanColor(gameState, window.location.search) ?? getHumanColor(gameState);
+  const localCanAct = canLocalPlayerAct(gameState, window.location.search);
   return (
     <>
       <div className="state-summary">
@@ -407,6 +416,7 @@ export default function ActionsToolbar({
           <ResourceCards
             playerState={gameState.player_state}
             playerKey={playerKey(gameState, humanColor)}
+            visible={true}
           />
         )}
         <Hidden breakpoint={{ size: "lg", direction: "up" }}>
@@ -420,10 +430,10 @@ export default function ActionsToolbar({
         </Hidden>
       </div>
       <div className="actions-toolbar">
-        {!(botsTurn || gameState.winning_color) && !replayMode && (
+        {!(botsTurn || gameState.winning_color) && !replayMode && localCanAct && (
           <PlayButtons />
         )}
-        {(botsTurn || gameState.winning_color) && (
+        {(botsTurn || gameState.winning_color || !localCanAct) && (
           <Prompt gameState={gameState} isBotThinking={isBotThinking} />
         )}
         {/* <Button
