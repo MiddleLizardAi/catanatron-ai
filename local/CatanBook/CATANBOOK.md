@@ -159,6 +159,14 @@ Target webhook response:
 
 Start with a simple local/test webhook bot before connecting any OpenAI/Codex logic.
 
+Local test adapter:
+
+```bash
+python3 local/codex_adapter/random_webhook.py --port 8787
+```
+
+Use `http://host.docker.internal:8787/decide` for a `WEBHOOK` player when the Catanatron server runs in Docker.
+
 ## Work Plan
 
 1. Keep Git flow clean: one feature branch per task, push to `origin`.

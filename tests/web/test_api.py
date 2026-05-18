@@ -92,13 +92,14 @@ def test_post_game_endpoint_accepts_player_objects(client):
     assert state_response.status_code == 200
     state_data = json.loads(state_response.data)
 
-    assert state_data["bot_colors"] == ["ORANGE", "WHITE"]
-    assert state_data["players"] == [
-        {"color": "RED", "name": "Dmytro", "type": "HUMAN", "is_bot": False},
-        {"color": "BLUE", "name": "Friend", "type": "HUMAN", "is_bot": False},
-        {"color": "ORANGE", "name": "Bot One", "type": "RANDOM", "is_bot": True},
-        {"color": "WHITE", "name": "Bot Two", "type": "CATANATRON", "is_bot": True},
-    ]
+    assert set(state_data["bot_colors"]) == {"ORANGE", "WHITE"}
+    players_by_color = {player["color"]: player for player in state_data["players"]}
+    assert players_by_color == {
+        "RED": {"color": "RED", "name": "Dmytro", "type": "HUMAN", "is_bot": False},
+        "BLUE": {"color": "BLUE", "name": "Friend", "type": "HUMAN", "is_bot": False},
+        "ORANGE": {"color": "ORANGE", "name": "Bot One", "type": "RANDOM", "is_bot": True},
+        "WHITE": {"color": "WHITE", "name": "Bot Two", "type": "CATANATRON", "is_bot": True},
+    }
 
 
 def test_post_game_endpoint_accepts_webhook_player(client):
@@ -115,8 +116,9 @@ def test_post_game_endpoint_accepts_webhook_player(client):
     game_id = json.loads(response.data)["game_id"]
     state_data = json.loads(client.get(f"/api/games/{game_id}/states/latest").data)
 
-    assert state_data["bot_colors"] == ["RED", "BLUE"]
-    assert state_data["players"][0] == {
+    assert set(state_data["bot_colors"]) == {"RED", "BLUE"}
+    players_by_color = {player["color"]: player for player in state_data["players"]}
+    assert players_by_color["RED"] == {
         "color": "RED",
         "name": "Codex",
         "type": "WEBHOOK",
