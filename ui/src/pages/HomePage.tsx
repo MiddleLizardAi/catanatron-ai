@@ -14,6 +14,7 @@ import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import { GridLoader } from "react-spinners";
 import {
   createGame,
+  type CreateGamePlayer,
   type MapTemplate,
   type PlayerArchetype,
 } from "../utils/apiClient";
@@ -45,17 +46,8 @@ export default function HomePage() {
   ]);
   const navigate = useNavigate();
   const humanCount = players.filter((player) => player === "HUMAN").length;
-  const hasTooManyHumans = humanCount > 1;
 
   const handlePlayerChange = (index: number, value: PlayerArchetype) => {
-    if (
-      value === "HUMAN" &&
-      players[index] !== "HUMAN" &&
-      humanCount >= 1
-    ) {
-      return;
-    }
-
     setPlayers((current) =>
       current.map((player, playerIndex) =>
         playerIndex === index ? value : player
@@ -78,20 +70,22 @@ export default function HomePage() {
   };
 
   const handleCreateGame = async () => {
-    if (hasTooManyHumans) {
-      return;
-    }
-
     setLoading(true);
+    const createGamePlayers: CreateGamePlayer[] = players.map((player, index) => ({
+      type: player,
+      name: player === "HUMAN" ? `Human ${humanCount > 1 ? index + 1 : ""}`.trim() : PLAYER_ARCHETYPES.find((option) => option.value === player)?.label ?? player,
+      color: PLAYER_COLORS[index],
+    }));
     const gameId = await createGame({
-      players,
+      players: createGamePlayers,
       mapTemplate,
       vpsToWin,
       discardLimit,
       friendlyRobber,
     });
     setLoading(false);
-    navigate("/games/" + gameId);
+    const firstHuman = createGamePlayers.find((player) => player.type === "HUMAN");
+    navigate(`/games/${gameId}${firstHuman ? `?player=${firstHuman.color}` : ""}`);
   };
 
   return (
@@ -192,9 +186,9 @@ export default function HomePage() {
                 <span>Players</span>
                 <strong>{players.length}/4</strong>
               </div>
-              {hasTooManyHumans && (
-                <Alert severity="error" className="players-alert">
-                  Only one Human player is allowed.
+              {humanCount > 1 && (
+                <Alert severity="info" className="players-alert">
+                  Share join links after starting so each human opens their own color.
                 </Alert>
               )}
               <div className="players-list">
@@ -223,11 +217,6 @@ export default function HomePage() {
                         <MenuItem
                           key={option.value}
                           value={option.value}
-                          disabled={
-                            option.value === "HUMAN" &&
-                            humanCount >= 1 &&
-                            player !== "HUMAN"
-                          }
                         >
                           {option.label}
                         </MenuItem>
@@ -259,7 +248,6 @@ export default function HomePage() {
               variant="contained"
               color="primary"
               className="start-btn"
-              disabled={hasTooManyHumans}
               onClick={handleCreateGame}
             >
               Start

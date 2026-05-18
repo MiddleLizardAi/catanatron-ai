@@ -73,6 +73,57 @@ def test_post_game_endpoint_accepts_custom_config(client):
     assert len(land_tiles) == 7
 
 
+def test_post_game_endpoint_accepts_player_objects(client):
+    response = client.post(
+        "/api/games",
+        json={
+            "players": [
+                {"type": "HUMAN", "name": "Dmytro", "color": "RED"},
+                {"type": "HUMAN", "name": "Friend", "color": "BLUE"},
+                {"type": "RANDOM", "name": "Bot One", "color": "ORANGE"},
+                {"type": "CATANATRON", "name": "Bot Two", "color": "WHITE"},
+            ]
+        },
+    )
+    assert response.status_code == 200
+    game_id = json.loads(response.data)["game_id"]
+
+    state_response = client.get(f"/api/games/{game_id}/states/latest")
+    assert state_response.status_code == 200
+    state_data = json.loads(state_response.data)
+
+    assert state_data["bot_colors"] == ["ORANGE", "WHITE"]
+    assert state_data["players"] == [
+        {"color": "RED", "name": "Dmytro", "type": "HUMAN", "is_bot": False},
+        {"color": "BLUE", "name": "Friend", "type": "HUMAN", "is_bot": False},
+        {"color": "ORANGE", "name": "Bot One", "type": "RANDOM", "is_bot": True},
+        {"color": "WHITE", "name": "Bot Two", "type": "CATANATRON", "is_bot": True},
+    ]
+
+
+def test_post_game_endpoint_accepts_webhook_player(client):
+    response = client.post(
+        "/api/games",
+        json={
+            "players": [
+                {"type": "WEBHOOK", "name": "Codex", "color": "RED", "webhook": "http://example.test/decide"},
+                {"type": "RANDOM", "name": "Bot", "color": "BLUE"},
+            ]
+        },
+    )
+    assert response.status_code == 200
+    game_id = json.loads(response.data)["game_id"]
+    state_data = json.loads(client.get(f"/api/games/{game_id}/states/latest").data)
+
+    assert state_data["bot_colors"] == ["RED", "BLUE"]
+    assert state_data["players"][0] == {
+        "color": "RED",
+        "name": "Codex",
+        "type": "WEBHOOK",
+        "is_bot": True,
+    }
+
+
 def test_post_game_endpoint_rejects_invalid_config(client):
     response = client.post(
         "/api/games",

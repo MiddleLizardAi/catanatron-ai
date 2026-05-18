@@ -6,7 +6,7 @@ from flask import Response, Blueprint, jsonify, abort, request
 
 from catanatron.web.models import upsert_game_state, get_game_state
 from catanatron.json import GameEncoder, action_from_json
-from catanatron.models.player import Color, RandomPlayer
+from catanatron.models.player import Color, RandomPlayer, WebHookPlayer
 from catanatron.game import Game
 from catanatron.models.map import build_map
 from catanatron.players.value import ValueFunctionPlayer
@@ -18,17 +18,47 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 VALID_MAP_TEMPLATES = {"BASE", "MINI", "TOURNAMENT"}
 
 
+def _with_metadata(player, player_type, name=None, webhook_url=None):
+    player.player_type = player_type
+    player.name = name or getattr(player, "name", None) or player_type.title()
+    if webhook_url:
+        player.webhook_url = webhook_url
+    return player
+
+
 def player_factory(player_key):
-    if player_key[0] == "CATANATRON":
-        return AlphaBetaPlayer(player_key[1], 2, True)
-    elif player_key[0] == "WEIGHTED_RANDOM":
-        return WeightedRandomPlayer(player_key[1])
-    elif player_key[0] == "RANDOM":
-        return RandomPlayer(player_key[1])
-    elif player_key[0] == "HUMAN":
-        return ValueFunctionPlayer(player_key[1], is_bot=False)
+    player_type, color = player_key
+    if player_type == "CATANATRON":
+        return _with_metadata(AlphaBetaPlayer(color, 2, True), player_type, "Catanatron")
+    elif player_type == "WEIGHTED_RANDOM":
+        return _with_metadata(WeightedRandomPlayer(color), player_type, "Weighted Random")
+    elif player_type == "RANDOM":
+        return _with_metadata(RandomPlayer(color), player_type, "Random")
+    elif player_type == "HUMAN":
+        return _with_metadata(ValueFunctionPlayer(color, is_bot=False), player_type, "Human")
     else:
         raise ValueError("Invalid player key")
+
+
+def player_factory_from_dict(player_dict):
+    player_type = (player_dict.get("type") or player_dict.get("name") or "").upper()
+    color = Color[player_dict["color"].upper()]
+    name = player_dict.get("name") or player_type.title()
+    webhook_url = player_dict.get("webhook") or player_dict.get("webhook_url")
+
+    if player_type == "WEBHOOK" or webhook_url:
+        if not webhook_url:
+            raise ValueError("WEBHOOK players require a webhook URL")
+        return WebHookPlayer(color, webhook_url, name=name)
+    if player_type == "CATANATRON":
+        return _with_metadata(AlphaBetaPlayer(color, 2, True), player_type, name)
+    if player_type == "WEIGHTED_RANDOM":
+        return _with_metadata(WeightedRandomPlayer(color), player_type, name)
+    if player_type == "RANDOM":
+        return _with_metadata(RandomPlayer(color), player_type, name)
+    if player_type == "HUMAN":
+        return _with_metadata(ValueFunctionPlayer(color, is_bot=False), player_type, name)
+    raise ValueError(f"Invalid player type: {player_type}")
 
 
 @bp.route("/games", methods=("POST",))
@@ -36,8 +66,8 @@ def post_game_endpoint():
     if not request.is_json or request.json is None or "players" not in request.json:
         abort(400, description="Missing or invalid JSON body: 'players' key required")
 
-    player_keys = request.json["players"]
-    if not isinstance(player_keys, list) or not 2 <= len(player_keys) <= 4:
+    players_payload = request.json["players"]
+    if not isinstance(players_payload, list) or not 2 <= len(players_payload) <= 4:
         abort(400, description="'players' must be a list with 2 to 4 entries")
 
     map_template = request.json.get("map_template", "BASE")
@@ -59,7 +89,13 @@ def post_game_endpoint():
     if not isinstance(friendly_robber, bool):
         abort(400, description="'friendly_robber' must be a boolean")
 
-    players = list(map(player_factory, zip(player_keys, Color)))
+    try:
+        if players_payload and isinstance(players_payload[0], dict):
+            players = [player_factory_from_dict(player) for player in players_payload]
+        else:
+            players = list(map(player_factory, zip(players_payload, Color)))
+    except (KeyError, ValueError, TypeError) as exc:
+        abort(400, description=str(exc))
     catan_map = build_map(map_template)
 
     game = Game(

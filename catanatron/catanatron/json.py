@@ -20,6 +20,26 @@ def longest_roads_by_player(state: State):
     return result
 
 
+def players_metadata(state: State):
+    players_by_color = {player.color: player for player in state.players}
+    return [
+        {
+            "color": player.color.value,
+            "name": getattr(player, "name", type(player).__name__),
+            "type": getattr(
+                player,
+                "player_type",
+                "HUMAN"
+                if not player.is_bot
+                else type(player).__name__.replace("Player", "").upper(),
+            ),
+            "is_bot": player.is_bot,
+        }
+        for color in state.colors
+        for player in [players_by_color[color]]
+    ]
+
+
 def action_from_json(data) -> Action:
     color = Color[data[0]]
     action_type = ActionType[data[1]]
@@ -88,6 +108,7 @@ class GameEncoder(json.JSONEncoder):
                 "action_records": [self.default(a) for a in obj.state.action_records],
                 "player_state": obj.state.player_state,
                 "colors": obj.state.colors,
+                "players": players_metadata(obj.state),
                 "bot_colors": list(
                     map(
                         lambda p: p.color, filter(lambda p: p.is_bot, obj.state.players)

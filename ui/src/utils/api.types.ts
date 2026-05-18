@@ -101,6 +101,12 @@ export type GameState = {
   tiles: PlacedTile[];
   adjacent_tiles: Record<string, Tile[]>;
   bot_colors: Color[];
+  players?: Array<{
+    color: Color;
+    name: string;
+    type: string;
+    is_bot: boolean;
+  }>;
   colors: Color[];
   current_color: Color;
   winning_color?: Color;

@@ -7,12 +7,20 @@ export type PlayerArchetype =
   | "HUMAN"
   | "RANDOM"
   | "CATANATRON"
-  | "WEIGHTED_RANDOM";
+  | "WEIGHTED_RANDOM"
+  | "WEBHOOK";
 export type MapTemplate = "BASE" | "MINI" | "TOURNAMENT";
 export type StateIndex = number | `${number}` | "latest";
 
+export type CreateGamePlayer = {
+  type: PlayerArchetype;
+  name: string;
+  color: Color;
+  webhook?: string;
+};
+
 type CreateGameOptions = {
-  players: PlayerArchetype[];
+  players: PlayerArchetype[] | CreateGamePlayer[];
   mapTemplate: MapTemplate;
   vpsToWin: number;
   discardLimit: number;
