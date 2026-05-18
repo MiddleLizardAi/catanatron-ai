@@ -1,24 +1,45 @@
 .dice-roll {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  z-index: 20;
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  z-index: 1102;
+  transform: translateX(-50%);
   display: flex;
+  align-items: center;
   gap: 0.45rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(18, 18, 18, 0.92);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
   pointer-events: none;
 }
 
-.dice-roll .die {
-  width: 2.25rem;
-  height: 2.25rem;
-  opacity: 0.78;
+.dice-roll__label {
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dice-roll__die {
+  width: 2.4rem;
+  height: 2.4rem;
+  opacity: 0.95;
   filter:
     drop-shadow(0 0.25rem 0.5rem rgba(0, 0, 0, 0.25))
     drop-shadow(0 0 0.5rem rgba(255, 255, 255, 0.12));
 }
 
-.dice-roll .die.rolling {
+.dice-roll__die.rolling {
   animation: dice-pop 0.5s ease-out;
+}
+
+@media (min-width: 960px) {
+  .dice-roll {
+    left: calc(50% - 20px);
+  }
 }
 
 @keyframes dice-pop {

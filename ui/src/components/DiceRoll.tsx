@@ -43,15 +43,16 @@ export default function DiceRoll({ values }: DiceRollProps) {
 
   return (
     <div className="dice-roll" aria-label={`Dice roll ${firstDie + secondDie}`}>
+      <span className="dice-roll__label">Roll {firstDie + secondDie}</span>
       <img
         src={lightDice[firstDie - 1]}
         alt={`First die: ${firstDie}`}
-        className={isRolling ? "die rolling" : "die"}
+        className={isRolling ? "dice-roll__die rolling" : "dice-roll__die"}
       />
       <img
         src={redDice[secondDie - 1]}
         alt={`Second die: ${secondDie}`}
-        className={isRolling ? "die rolling" : "die"}
+        className={isRolling ? "dice-roll__die rolling" : "dice-roll__die"}
       />
     </div>
   );

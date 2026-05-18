@@ -18,6 +18,7 @@ import { getHumanColor } from "../utils/stateUtils";
 import AnalysisBox from "../components/AnalysisBox";
 import { Divider } from "@mui/material";
 import JoinLinks from "../components/JoinLinks";
+import DiceRoll from "../components/DiceRoll";
 
 const ROBOT_THINKING_TIME = 300;
 
@@ -85,10 +86,17 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
     );
   }
 
+  const lastRollRecord = state.gameState.action_records
+    .slice()
+    .reverse()
+    .find(([action]) => action[1] === "ROLL");
+  const diceValues = lastRollRecord ? lastRollRecord[1] as [number, number] : null;
+
   return (
     <main>
       <h1 className="logo">Catanatron</h1>
       {gameId ? <JoinLinks gameId={gameId} gameState={state.gameState} /> : null}
+      <DiceRoll values={diceValues} />
       <ZoomableBoard replayMode={replayMode} />
       <ActionsToolbar isBotThinking={isBotThinking} replayMode={replayMode} />
       <LeftDrawer />

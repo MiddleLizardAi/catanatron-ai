@@ -6,7 +6,6 @@ import Tile from "./Tile";
 import Node from "./Node";
 import Edge, { toEdgeId, type EdgeId } from "./Edge";
 import Robber from "./Robber";
-import DiceRoll from "../components/DiceRoll";
 
 import "./Board.scss";
 
@@ -62,12 +61,6 @@ export default function Board({
   isMovingRobber,
   robberCoordinates,
 }: BoardProps) {
-  const lastRollRecord = gameState.action_records
-    .slice()
-    .reverse()
-    .find(([action]) => action[1] === "ROLL");
-  const diceValues = lastRollRecord ? lastRollRecord[1] as [number, number] : null;
-
   // TODO: Keep in sync with CSS
   const containerHeight = height - 144 - 38 - 40;
   const containerWidth = isMobile ? width - 280 : width;
@@ -127,7 +120,6 @@ export default function Board({
   );
   return (
     <div className={classnames("board", { show })}>
-      <DiceRoll values={diceValues} />
       {tiles}
       {edges}
       {nodes}

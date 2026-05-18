@@ -1,8 +1,13 @@
 @use "../variables.scss";
 
 .state-summary {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  z-index: 1100;
+  transform: translateX(-50%);
   height: 60px;
-  width: 100%;
+  width: min(100% - 24px, variables.$sm-breakpoint);
   max-width: variables.$sm-breakpoint;
   margin: 0 auto;
   display: flex;
@@ -10,6 +15,10 @@
   justify-content: space-between;
   gap: variables.$sm-gutter;
   padding: variables.$sm-gutter;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(18, 18, 18, 0.92);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 
   .MuiButton-root {
     flex-shrink: 0;
@@ -28,8 +37,13 @@
 
 $btn-height: 60px;
 .actions-toolbar {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  z-index: 1101;
+  transform: translateX(-50%);
   height: $btn-height + 2 * variables.$sm-gutter;
-  width: 100%;
+  width: min(100% - 24px, variables.$sm-breakpoint);
   max-width: variables.$sm-breakpoint;
   margin-left: auto;
   margin-right: auto;
@@ -37,6 +51,10 @@ $btn-height: 60px;
   display: flex;
   justify-content: space-between;
   gap: variables.$sm-gutter;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(18, 18, 18, 0.94);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 
   button {
     min-width: 60px;
@@ -65,5 +83,21 @@ $btn-height: 60px;
     .MuiButton-startIcon {
       margin: 0;
     }
+  }
+}
+
+@media (min-width: variables.$md-breakpoint) {
+  .state-summary,
+  .actions-toolbar {
+    left: calc(50% + 140px);
+    width: min(calc(100% - 304px), variables.$sm-breakpoint);
+  }
+}
+
+@media (min-width: variables.$lg-breakpoint) {
+  .state-summary,
+  .actions-toolbar {
+    left: calc(50% - 20px);
+    width: min(calc(100% - 604px), variables.$sm-breakpoint);
   }
 }

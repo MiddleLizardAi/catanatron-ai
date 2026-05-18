@@ -148,10 +148,11 @@ class WebHookPlayer(Player):
 
     @staticmethod
     def _action_to_json(action):
-        value = action.value
-        if isinstance(value, tuple):
-            value = list(value)
-        return [action.color.value, action.action_type.value, value]
+        return [
+            action.color.value,
+            action.action_type.value,
+            WebHookPlayer._json_value(action.value),
+        ]
 
     def _state_to_json(self, game):
         state = game.state
@@ -243,16 +244,17 @@ class WebHookPlayer(Player):
 
         return {"type": "WATER"}
 
-    def _json_value(self, value):
+    @staticmethod
+    def _json_value(value):
         if isinstance(value, Enum):
             return value.value
         if isinstance(value, tuple):
-            return [self._json_value(item) for item in value]
+            return [WebHookPlayer._json_value(item) for item in value]
         if isinstance(value, list):
-            return [self._json_value(item) for item in value]
+            return [WebHookPlayer._json_value(item) for item in value]
         if isinstance(value, dict):
             return {
-                self._json_value(key): self._json_value(item)
+                WebHookPlayer._json_value(key): WebHookPlayer._json_value(item)
                 for key, item in value.items()
             }
         return value
