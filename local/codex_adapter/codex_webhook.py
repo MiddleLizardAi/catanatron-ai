@@ -20,6 +20,7 @@ PRODUCTION_WEIGHTS = {
 RESOURCE_ORDER = ["WOOD", "BRICK", "WHEAT", "ORE", "SHEEP"]
 ACTION_PRIORITY = [
     "ROLL",
+    "MOVE_ROBBER",
     "BUILD_CITY",
     "BUILD_SETTLEMENT",
     "BUILD_ROAD",
@@ -34,11 +35,21 @@ ACTION_PRIORITY = [
 
 
 def action_type(action):
+    if isinstance(action, dict):
+        return action.get("type")
     return action[1]
 
 
 def action_value(action):
+    if isinstance(action, dict):
+        return action.get("value")
     return action[2]
+
+
+def action_id(action, fallback_index):
+    if isinstance(action, dict):
+        return action.get("id"), action.get("index", fallback_index)
+    return None, fallback_index
 
 
 def color_index(state, color):
@@ -109,61 +120,106 @@ def choose_year_of_plenty_action(actions, state, color):
     return max(actions, key=score)
 
 
+def coordinate_score(state, coordinate):
+    score = 0
+    for item in state.get("tiles", []):
+        if item.get("coordinate") != coordinate:
+            continue
+        tile = item.get("tile", {})
+        if tile.get("type") == "RESOURCE_TILE":
+            score += PRODUCTION_WEIGHTS.get(tile.get("number"), 0)
+    return score
+
+
+def choose_robber_action(actions, payload):
+    state = payload.get("state", {})
+    leader = payload.get("strategy", {}).get("public_leader", {}).get("color")
+
+    def score(action):
+        value = action_value(action)
+        if not isinstance(value, list) or len(value) != 2:
+            return 0
+        coordinate, victim = value
+        leader_bonus = 5 if victim == leader else 0
+        victim_bonus = 2 if victim else 0
+        return coordinate_score(state, coordinate) + leader_bonus + victim_bonus
+
+    return max(actions, key=score)
+
+
 def choose_action(payload):
-    actions = payload.get("playable_actions", [])
+    actions = payload.get("legal_actions") or payload.get("playable_actions", [])
     state = payload.get("state", {})
     color = payload.get("color")
 
     if not actions:
-        return 0, "no playable actions"
+        return None, 0, "no playable actions"
 
     grouped = {}
     for index, action in enumerate(actions):
         grouped.setdefault(action_type(action), []).append((index, action))
 
     if "ROLL" in grouped:
-        return grouped["ROLL"][0][0], "roll immediately"
+        index, selected = grouped["ROLL"][0]
+        selected_id, selected_index = action_id(selected, index)
+        return selected_id, selected_index, "roll immediately"
 
     if "DISCARD_RESOURCE" in grouped:
         candidates = [item[1] for item in grouped["DISCARD_RESOURCE"]]
         selected = choose_discard_action(candidates, state, color)
-        return actions.index(selected), "discard most abundant resource"
+        selected_id, selected_index = action_id(selected, actions.index(selected))
+        return selected_id, selected_index, "discard most abundant resource"
+
+    if "MOVE_ROBBER" in grouped:
+        candidates = [item[1] for item in grouped["MOVE_ROBBER"]]
+        selected = choose_robber_action(candidates, payload)
+        selected_id, selected_index = action_id(selected, actions.index(selected))
+        return selected_id, selected_index, "rob public leader or strongest tile"
 
     if "BUILD_INITIAL_SETTLEMENT" in grouped:
         candidates = [item[1] for item in grouped["BUILD_INITIAL_SETTLEMENT"]]
         selected = choose_best_node_action(candidates, state)
-        return actions.index(selected), "best initial settlement production"
+        selected_id, selected_index = action_id(selected, actions.index(selected))
+        return selected_id, selected_index, "best initial settlement production"
 
     if "BUILD_SETTLEMENT" in grouped:
         candidates = [item[1] for item in grouped["BUILD_SETTLEMENT"]]
         selected = choose_best_node_action(candidates, state)
-        return actions.index(selected), "best settlement production"
+        selected_id, selected_index = action_id(selected, actions.index(selected))
+        return selected_id, selected_index, "best settlement production"
 
     if "BUILD_INITIAL_ROAD" in grouped:
         candidates = [item[1] for item in grouped["BUILD_INITIAL_ROAD"]]
         selected = choose_best_road_action(candidates, state)
-        return actions.index(selected), "road toward best adjacent node"
+        selected_id, selected_index = action_id(selected, actions.index(selected))
+        return selected_id, selected_index, "road toward best adjacent node"
 
     if "BUILD_ROAD" in grouped:
         candidates = [item[1] for item in grouped["BUILD_ROAD"]]
         selected = choose_best_road_action(candidates, state)
-        return actions.index(selected), "road toward best adjacent node"
+        selected_id, selected_index = action_id(selected, actions.index(selected))
+        return selected_id, selected_index, "road toward best adjacent node"
 
     if "PLAY_MONOPOLY" in grouped:
         candidates = [item[1] for item in grouped["PLAY_MONOPOLY"]]
         selected = choose_monopoly_action(candidates, state, color)
-        return actions.index(selected), "monopoly most visible opponent resource"
+        selected_id, selected_index = action_id(selected, actions.index(selected))
+        return selected_id, selected_index, "monopoly most visible opponent resource"
 
     if "PLAY_YEAR_OF_PLENTY" in grouped:
         candidates = [item[1] for item in grouped["PLAY_YEAR_OF_PLENTY"]]
         selected = choose_year_of_plenty_action(candidates, state, color)
-        return actions.index(selected), "take scarce resources"
+        selected_id, selected_index = action_id(selected, actions.index(selected))
+        return selected_id, selected_index, "take scarce resources"
 
     for preferred_type in ACTION_PRIORITY:
         if preferred_type in grouped:
-            return grouped[preferred_type][0][0], f"priority {preferred_type}"
+            index, selected = grouped[preferred_type][0]
+            selected_id, selected_index = action_id(selected, index)
+            return selected_id, selected_index, f"priority {preferred_type}"
 
-    return 0, "fallback first action"
+    selected_id, selected_index = action_id(actions[0], 0)
+    return selected_id, selected_index, "fallback first action"
 
 
 class DecisionHandler(BaseHTTPRequestHandler):
@@ -177,8 +233,11 @@ class DecisionHandler(BaseHTTPRequestHandler):
 
         try:
             payload = json.loads(raw_body.decode("utf-8"))
-            action_index, reason = choose_action(payload)
-            self._send_json({"action_index": action_index, "reason": reason})
+            selected_id, action_index, reason = choose_action(payload)
+            response = {"action_index": action_index, "reason": reason}
+            if selected_id is not None:
+                response["action_id"] = selected_id
+            self._send_json(response)
         except Exception as exc:
             self._send_json({"action_index": 0, "error": str(exc)}, status=200)
 

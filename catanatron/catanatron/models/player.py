@@ -5,7 +5,7 @@ import urllib.request
 
 from enum import Enum
 
-from catanatron.models.enums import Action, ActionType
+from catanatron.models.enums import Action, ActionType, RESOURCES, DEVELOPMENT_CARDS
 
 
 class Color(Enum):
@@ -104,13 +104,19 @@ class WebHookPlayer(Player):
         self.player_type = "WEBHOOK"
 
     def decide(self, game, playable_actions):
+        legal_actions = [
+            self._legal_action_to_json(index, action)
+            for index, action in enumerate(playable_actions)
+        ]
         payload = {
             "game_id": game.id,
             "color": self.color.value,
             "name": self.name,
             "state_index": len(game.state.action_records),
             "current_prompt": game.state.current_prompt.value,
+            "legal_actions": legal_actions,
             "playable_actions": [self._action_to_json(action) for action in playable_actions],
+            "strategy": self._strategy_to_json(game, legal_actions),
             "state": self._state_to_json(game),
         }
 
@@ -133,6 +139,12 @@ class WebHookPlayer(Player):
             return playable_actions[0]
 
     def _select_action(self, data, playable_actions):
+        if "action_id" in data:
+            action_id = str(data["action_id"])
+            for index, action in enumerate(playable_actions):
+                if self._action_id(index, action) == action_id:
+                    return action
+
         if "action_index" in data:
             index = int(data["action_index"])
             if 0 <= index < len(playable_actions):
@@ -147,12 +159,110 @@ class WebHookPlayer(Player):
         return playable_actions[0]
 
     @staticmethod
+    def _action_id(index, action):
+        value = WebHookPlayer._json_value(action.value)
+        value_json = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        return f"{index}:{action.action_type.value}:{value_json}"
+
+    @staticmethod
+    def _legal_action_to_json(index, action):
+        return {
+            "id": WebHookPlayer._action_id(index, action),
+            "index": index,
+            "type": action.action_type.value,
+            "value": WebHookPlayer._json_value(action.value),
+            "action": WebHookPlayer._action_to_json(action),
+        }
+
+    @staticmethod
     def _action_to_json(action):
         return [
             action.color.value,
             action.action_type.value,
             WebHookPlayer._json_value(action.value),
         ]
+
+    def _strategy_to_json(self, game, legal_actions):
+        from catanatron.state_functions import (
+            get_actual_victory_points,
+            get_visible_victory_points,
+            player_key,
+            player_num_resource_cards,
+        )
+
+        state = game.state
+        current_key = player_key(state, self.color)
+        visible_players = []
+
+        for color in state.colors:
+            key = player_key(state, color)
+            player = next(player for player in state.players if player.color == color)
+            player_summary = {
+                "color": color.value,
+                "name": getattr(player, "name", type(player).__name__),
+                "type": getattr(
+                    player,
+                    "player_type",
+                    "HUMAN"
+                    if not player.is_bot
+                    else type(player).__name__.replace("Player", "").upper(),
+                ),
+                "is_self": color == self.color,
+                "public_victory_points": get_visible_victory_points(state, color),
+                "resource_card_count": player_num_resource_cards(state, color),
+                "development_card_count": sum(
+                    state.player_state[f"{key}_{card}_IN_HAND"]
+                    for card in DEVELOPMENT_CARDS
+                ),
+                "played_knights": state.player_state[f"{key}_PLAYED_KNIGHT"],
+                "roads": state.player_state[f"{key}_ROADS_AVAILABLE"],
+                "settlements": state.player_state[f"{key}_SETTLEMENTS_AVAILABLE"],
+                "cities": state.player_state[f"{key}_CITIES_AVAILABLE"],
+            }
+            if color == self.color:
+                player_summary["actual_victory_points"] = get_actual_victory_points(
+                    state, color
+                )
+                player_summary["resources"] = {
+                    resource: state.player_state[f"{current_key}_{resource}_IN_HAND"]
+                    for resource in RESOURCES
+                }
+                player_summary["development_cards"] = {
+                    card: state.player_state[f"{current_key}_{card}_IN_HAND"]
+                    for card in DEVELOPMENT_CARDS
+                }
+            visible_players.append(player_summary)
+
+        public_leader = max(
+            visible_players,
+            key=lambda player: player["public_victory_points"],
+        )
+
+        action_type_counts = {}
+        for action in legal_actions:
+            action_type_counts[action["type"]] = action_type_counts.get(action["type"], 0) + 1
+
+        return {
+            "objective": "Choose exactly one id from legal_actions. Do not invent actions.",
+            "response_schema": {
+                "action_id": "string from legal_actions[].id",
+                "reason": "short strategy reason",
+            },
+            "priorities": [
+                "Roll immediately when ROLL is legal.",
+                "During setup, choose high-probability settlement production with diverse resources.",
+                "Prefer cities when affordable and ore/wheat production is useful.",
+                "Prefer settlements before speculative roads.",
+                "Use the robber against the public leader or the strongest production tile.",
+                "Buy development cards when city/settlement progress is unavailable.",
+                "End the turn only when no useful build, trade, or development action is legal.",
+            ],
+            "public_leader": public_leader,
+            "self": next(player for player in visible_players if player["is_self"]),
+            "players": visible_players,
+            "legal_action_count": len(legal_actions),
+            "legal_action_type_counts": action_type_counts,
+        }
 
     def _state_to_json(self, game):
         state = game.state

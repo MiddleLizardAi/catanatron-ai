@@ -16,12 +16,14 @@ class DecisionHandler(BaseHTTPRequestHandler):
 
         try:
             payload = json.loads(raw_body.decode("utf-8"))
-            actions = payload.get("playable_actions", [])
+            actions = payload.get("legal_actions") or payload.get("playable_actions", [])
             action_index = random.randrange(len(actions)) if actions else 0
             response = {
                 "action_index": action_index,
                 "reason": "random local adapter",
             }
+            if actions and isinstance(actions[action_index], dict):
+                response["action_id"] = actions[action_index].get("id")
             self._send_json(response)
         except Exception as exc:
             self._send_json({"action_index": 0, "error": str(exc)}, status=200)
