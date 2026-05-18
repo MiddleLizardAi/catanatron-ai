@@ -6,7 +6,9 @@ import ResourceCards from "./ResourceCards";
 
 export default function PlayerStateBox({ playerState, playerKey, color, showHand }: {
   playerState: PlayerState; playerKey: string; color: Color; showHand: boolean }) {
+  const publicVps = playerState[`${playerKey}_VICTORY_POINTS`];
   const actualVps = playerState[`${playerKey}_ACTUAL_VICTORY_POINTS`];
+  const visibleVps = showHand ? actualVps : publicVps;
   return (
     <div className={cn("player-state-box foreground", color)}>
       <ResourceCards playerState={playerState} playerKey={playerKey} visible={showHand} />
@@ -31,11 +33,11 @@ export default function PlayerStateBox({ playerState, playerKey, color, showHand
         </div>
         <div
           className={cn("victory-points center-text", {
-            bold: actualVps >= 10,
+            bold: visibleVps >= 10,
           })}
-          title="Victory Points"
+          title={showHand ? "Victory Points" : "Public Victory Points"}
         >
-          {actualVps}
+          {visibleVps}
           <small>VPs</small>
         </div>
       </div>
