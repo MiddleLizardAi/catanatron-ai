@@ -111,6 +111,7 @@ class WebHookPlayer(Player):
             "state_index": len(game.state.action_records),
             "current_prompt": game.state.current_prompt.value,
             "playable_actions": [self._action_to_json(action) for action in playable_actions],
+            "state": self._state_to_json(game),
         }
 
         request = urllib.request.Request(
@@ -151,6 +152,110 @@ class WebHookPlayer(Player):
         if isinstance(value, tuple):
             value = list(value)
         return [action.color.value, action.action_type.value, value]
+
+    def _state_to_json(self, game):
+        state = game.state
+        nodes = {}
+        edges = {}
+
+        for coordinate, tile in state.board.map.tiles.items():
+            for direction, node_id in tile.nodes.items():
+                building = state.board.buildings.get(node_id, None)
+                color = None if building is None else building[0]
+                building_type = None if building is None else building[1]
+                nodes[node_id] = {
+                    "id": node_id,
+                    "tile_coordinate": self._json_value(coordinate),
+                    "direction": self._json_value(direction),
+                    "building": self._json_value(building_type),
+                    "color": self._json_value(color),
+                }
+
+            for direction, edge in tile.edges.items():
+                edge_id = tuple(sorted(edge))
+                edges[edge_id] = {
+                    "id": self._json_value(edge_id),
+                    "tile_coordinate": self._json_value(coordinate),
+                    "direction": self._json_value(direction),
+                    "color": self._json_value(state.board.roads.get(edge, None)),
+                }
+
+        return {
+            "tiles": [
+                {
+                    "coordinate": self._json_value(coordinate),
+                    "tile": self._tile_to_json(tile),
+                }
+                for coordinate, tile in state.board.map.tiles.items()
+            ],
+            "adjacent_tiles": {
+                str(node_id): [self._tile_to_json(tile) for tile in tiles]
+                for node_id, tiles in state.board.map.adjacent_tiles.items()
+            },
+            "nodes": list(nodes.values()),
+            "edges": list(edges.values()),
+            "player_state": self._json_value(state.player_state),
+            "colors": self._json_value(state.colors),
+            "bot_colors": [
+                player.color.value for player in state.players if player.is_bot
+            ],
+            "players": [
+                {
+                    "color": player.color.value,
+                    "name": getattr(player, "name", type(player).__name__),
+                    "type": getattr(
+                        player,
+                        "player_type",
+                        "HUMAN"
+                        if not player.is_bot
+                        else type(player).__name__.replace("Player", "").upper(),
+                    ),
+                    "is_bot": player.is_bot,
+                }
+                for player in state.players
+            ],
+            "robber_coordinate": self._json_value(state.board.robber_coordinate),
+            "action_records": [
+                [self._action_to_json(action), self._json_value(result)]
+                for action, result in state.action_records[-20:]
+            ],
+        }
+
+    def _tile_to_json(self, tile):
+        if hasattr(tile, "direction"):
+            return {
+                "id": tile.id,
+                "type": "PORT",
+                "direction": self._json_value(tile.direction),
+                "resource": self._json_value(tile.resource),
+            }
+
+        if hasattr(tile, "resource"):
+            resource = self._json_value(tile.resource)
+            if resource is None:
+                return {"id": tile.id, "type": "DESERT"}
+            return {
+                "id": tile.id,
+                "type": "RESOURCE_TILE",
+                "resource": resource,
+                "number": tile.number,
+            }
+
+        return {"type": "WATER"}
+
+    def _json_value(self, value):
+        if isinstance(value, Enum):
+            return value.value
+        if isinstance(value, tuple):
+            return [self._json_value(item) for item in value]
+        if isinstance(value, list):
+            return [self._json_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                self._json_value(key): self._json_value(item)
+                for key, item in value.items()
+            }
+        return value
 
     @staticmethod
     def _action_from_json(data):

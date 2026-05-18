@@ -144,7 +144,21 @@ Target webhook request:
 {
   "game_id": "...",
   "color": "ORANGE",
-  "state": {},
+  "name": "Local Codex",
+  "state_index": 0,
+  "current_prompt": "BUILD_INITIAL_SETTLEMENT",
+  "state": {
+    "tiles": [],
+    "nodes": [],
+    "edges": [],
+    "adjacent_tiles": {},
+    "player_state": {},
+    "colors": ["RED", "BLUE", "ORANGE", "WHITE"],
+    "bot_colors": ["ORANGE", "WHITE"],
+    "players": [],
+    "robber_coordinate": [0, 0, 0],
+    "action_records": []
+  },
   "playable_actions": []
 }
 ```
@@ -153,7 +167,8 @@ Target webhook response:
 
 ```json
 {
-  "action": ["ORANGE", "BUILD_ROAD", [12, 18]]
+  "action_index": 0,
+  "reason": "best settlement production"
 }
 ```
 
@@ -163,6 +178,12 @@ Local test adapter:
 
 ```bash
 python3 local/codex_adapter/random_webhook.py --port 8787
+```
+
+Local heuristic Codex adapter:
+
+```bash
+python3 local/codex_adapter/codex_webhook.py --port 8787
 ```
 
 Use `http://host.docker.internal:8787/decide` for a `WEBHOOK` player when the Catanatron server runs in Docker.
