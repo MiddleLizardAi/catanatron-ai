@@ -1,28 +1,43 @@
 @use "../variables.scss";
 
 .number-token {
-  --scale-factor: 0.65;
-  --base-font-size: 100%;
-  height: 4ch;
-  width: 4ch;
-  text-align: center;
-  padding: 5px;
-  line-height: 0.8rem;
+  height: 2rem;
+  width: 2rem;
+  padding: 0;
   position: relative;
   display: flex;
-  flex-direction: column;
-  .pips {
-    font-size: calc(var(--base-font-size) * 60%);
-  }
-
-  &.number-token-red {
-    color: #ff5555;
-  }
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  box-shadow: none !important;
 
   &.flashing {
     animation: pulse 0.5s ease-in-out infinite alternate;
     cursor: pointer;
   }
+}
+
+.number-token__disc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+}
+
+.number-token__disc--black {
+  background: #111;
+}
+
+.number-token__disc--red {
+  background: #8e1717;
+}
+
+.number-token__disc img {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 @keyframes pulse {
@@ -36,6 +51,17 @@
 
 @media (max-width: variables.$sm-breakpoint) {
   .number-token {
-    --base-font-size: 75%;
+    height: 1.65rem;
+    width: 1.65rem;
+  }
+
+  .number-token__disc {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+
+  .number-token__disc img {
+    width: 1.3rem;
+    height: 1.3rem;
   }
 }

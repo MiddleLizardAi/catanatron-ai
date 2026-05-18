@@ -9,6 +9,16 @@ import lumberTile from "../assets/tile_wood.png";
 import oreTile from "../assets/tile_ore.png";
 import woolTile from "../assets/tile_sheep.png";
 import maritimeTile from "../assets/tile_maritime.png";
+import number2 from "../assets/numbers/2.circle.fill.svg";
+import number3 from "../assets/numbers/3.circle.fill.svg";
+import number4 from "../assets/numbers/4.circle.fill.svg";
+import number5 from "../assets/numbers/5.circle.fill.svg";
+import number6 from "../assets/numbers/6.circle.fill.svg";
+import number8 from "../assets/numbers/8.circle.fill.svg";
+import number9 from "../assets/numbers/9.circle.fill.svg";
+import number10 from "../assets/numbers/10.circle.fill.svg";
+import number11 from "../assets/numbers/11.circle.fill.svg";
+import number12 from "../assets/numbers/12.circle.fill.svg";
 import { SQRT3, tilePixelVector } from "../utils/coordinates";
 import {
   type Direction,
@@ -29,41 +39,41 @@ export function NumberToken({
   style,
   flashing,
 }: NumberTokenProps) {
+  const tokenImage = NUMBER_TOKEN_IMAGES[number];
+
   return (
     <Paper
       elevation={3}
-      className={cn("number-token", className, {
-        flashing: flashing,
-        "number-token-red": number === 6 || number === 8,
-      })}
+      className={cn("number-token", className, { flashing })}
       style={style}
     >
-      <div>{number}</div>
-      <div className="pips">{numberToPips(number)}</div>
+      {tokenImage && (
+        <span
+          className={cn(
+            "number-token__disc",
+            number === 6 || number === 8
+              ? "number-token__disc--red"
+              : "number-token__disc--black"
+          )}
+        >
+          <img src={tokenImage} alt={number.toString()} />
+        </span>
+      )}
     </Paper>
   );
 }
 
-const numberToPips = (number: number) => {
-  switch (number) {
-    case 2:
-    case 12:
-      return "•";
-    case 3:
-    case 11:
-      return "••";
-    case 4:
-    case 10:
-      return "•••";
-    case 5:
-    case 9:
-      return "••••";
-    case 6:
-    case 8:
-      return "•••••";
-    default:
-      return "";
-  }
+const NUMBER_TOKEN_IMAGES: Record<number, string> = {
+  2: number2,
+  3: number3,
+  4: number4,
+  5: number5,
+  6: number6,
+  8: number8,
+  9: number9,
+  10: number10,
+  11: number11,
+  12: number12,
 };
 
 const RESOURCES: { [K in ResourceCard]: string } = {

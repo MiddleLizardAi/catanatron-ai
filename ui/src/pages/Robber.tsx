@@ -3,7 +3,7 @@ import {
   tilePixelVector,
   type CubeCoordinate,
 } from "../utils/coordinates";
-import { Paper } from "@mui/material";
+import robberIcon from "../assets/icons/figure.and.child.holdinghands.svg";
 
 type RobberProps = {
   center: [number, number];
@@ -20,15 +20,14 @@ export default function Robber({ center, size, coordinate }: RobberProps) {
   const y = tileY + deltaY;
 
   return (
-    <Paper
-      elevation={3}
-      className="robber number-token"
+    <div
+      className="robber"
       style={{
         left: x,
         top: y,
       }}
     >
-      R
-    </Paper>
+      <img src={robberIcon} alt="Robber" />
+    </div>
   );
 }
