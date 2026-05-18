@@ -72,7 +72,6 @@ function buildEdgeActions(state: CatanState, search: string) {
   if (inInitialBuildPhase) {
     buildInitialRoadActions.forEach((action) => {
       edgeActions[`${action[2][0]},${action[2][1]}`] = action;
-      console.log(Object.keys(edgeActions), action);
     });
   } else if (state.isBuildingRoad || state.isRoadBuilding) {
     state.gameState.current_playable_actions

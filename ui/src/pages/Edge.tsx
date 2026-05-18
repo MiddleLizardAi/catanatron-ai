@@ -19,7 +19,7 @@ type EdgeProps = {
   direction: Direction;
   color: Color | null;
   flashing: boolean;
-  onClick: React.MouseEventHandler;
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
 };
 
 export default function Edge({
@@ -39,14 +39,21 @@ export default function Edge({
   return (
     <div
       id={id}
-      className={"edge " + direction}
+      className={cn("edge", direction, { "edge--active": flashing })}
       style={{
         left: tileX,
         top: tileY,
         width: size * 0.9,
         transform: transform,
       }}
-      onClick={onClick}
+      onClick={(event) => {
+        if (!onClick) {
+          return;
+        }
+
+        event.stopPropagation();
+        onClick(event);
+      }}
     >
       {color && <Road color={color} />}
       {flashing && <div className="pulse"></div>}
