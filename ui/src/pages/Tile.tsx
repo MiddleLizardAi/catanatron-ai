@@ -179,6 +179,8 @@ export default function Tile({
         backgroundImage: `url("${resourceTile}")`,
         backgroundSize: "contain",
         backgroundRepeat: "no-repeat",
+        backgroundPositionY: "6px",
+        backgroundPositionX: "1px",
       }}
       onClick={onClick}
     >
