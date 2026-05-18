@@ -529,6 +529,14 @@ function OptionsButton({
         open={open}
         anchorEl={anchorRef.current}
         placement="top"
+        modifiers={[
+          {
+            name: "offset",
+            options: {
+              offset: [0, 88],
+            },
+          },
+        ]}
         role={undefined}
         transition
       >
