@@ -55,9 +55,32 @@
 }
 
 .MuiPaper-elevation3.robber {
-  background: #6b6b6b;
   position: absolute;
   font-size: 100%;
+}
+
+.robber {
+  position: absolute;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50% 50% 45% 45%;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(255, 255, 255, 0.24), transparent 26%),
+    linear-gradient(180deg, #151515 0%, #050505 100%);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.55),
+    0 8px 16px rgba(0, 0, 0, 0.55);
+}
+
+.robber img {
+  display: block;
+  width: 72%;
+  height: 72%;
+  filter: invert(1);
+  opacity: 0.94;
 }
 
 // ===== Tiles

@@ -25,6 +25,8 @@ export default function Robber({ center, size, coordinate }: RobberProps) {
       style={{
         left: x,
         top: y,
+        width: size * 0.55,
+        height: size * 0.62,
       }}
     >
       <img src={robberIcon} alt="Robber" />

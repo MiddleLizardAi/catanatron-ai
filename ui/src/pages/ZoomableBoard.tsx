@@ -122,10 +122,14 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
     }),
     []
   );
+  const isMoveRobberPrompt =
+    !replayMode &&
+    gameState.current_prompt === "MOVE_ROBBER" &&
+    canLocalPlayerAct(gameState, window.location.search);
   const handleTileClick = useCallback(
     memoize((coordinate: TileCoordinate) => {
       console.log("Clicked Tile ", coordinate);
-      if (state.isMovingRobber) {
+      if (isMoveRobberPrompt) {
         // Find the "MOVE_ROBBER" action in current_playable_actions that
         // corresponds to the tile coordinate selected by the user
         const matchingAction = gameState.current_playable_actions.find(
@@ -142,13 +146,13 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
         }
       }
     }),
-    [state.isMovingRobber]
+    [isMoveRobberPrompt, gameState.current_playable_actions, gameId, dispatch]
   );
 
   const nodeActions = replayMode ? {} : buildNodeActions(state, window.location.search);
   const edgeActions = replayMode ? {} : buildEdgeActions(state, window.location.search);
   const robberCoordinates = new Set(
-    state.isMovingRobber
+    isMoveRobberPrompt
       ? gameState.current_playable_actions
           .filter((action) => action[1] === "MOVE_ROBBER")
           .map((action) => `${action[2][0]}`)
@@ -179,7 +183,7 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
             show={show}
             gameState={gameState}
             isMobile={isMobile}
-            isMovingRobber={state.isMovingRobber}
+            isMovingRobber={isMoveRobberPrompt}
             robberCoordinates={robberCoordinates}
           />
         </TransformComponent>

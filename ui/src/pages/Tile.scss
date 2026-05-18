@@ -1,5 +1,23 @@
 @use "../variables.scss";
 
+.tile--robber-target {
+  cursor: pointer;
+  filter:
+    brightness(1.12)
+    drop-shadow(0 0 10px rgba(255, 255, 255, 0.55))
+    drop-shadow(0 0 18px rgba(255, 215, 64, 0.45));
+}
+
+.tile--robber-target::after {
+  content: "";
+  position: absolute;
+  inset: 8%;
+  border: 3px solid rgba(255, 255, 255, 0.92);
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+  pointer-events: none;
+  animation: robber-target-pulse 0.75s ease-in-out infinite alternate;
+}
+
 .number-token {
   height: 2rem;
   width: 2rem;
@@ -46,6 +64,15 @@
   }
   100% {
     box-shadow: 0 0 0 4px rgba(200, 200, 200, 0.6);
+  }
+}
+
+@keyframes robber-target-pulse {
+  0% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 1;
   }
 }
 

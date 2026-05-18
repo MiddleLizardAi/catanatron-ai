@@ -82,7 +82,6 @@ function PlayButtons() {
     gameState.current_prompt === "PLAY_TURN" &&
     !gameState.player_state[`${key}_HAS_ROLLED`];
   const isDiscard = gameState.current_prompt === "DISCARD";
-  const isMoveRobber = gameState.current_prompt === "MOVE_ROBBER";
   const isPlayingDevCard =
     isPlayingMonopoly || isPlayingYearOfPlenty || isRoadBuilding;
   const playableDevCardTypes = new Set(
@@ -282,9 +281,6 @@ function PlayButtons() {
     return items.sort((a, b) => a.label.localeCompare(b.label));
   }, [tradeActions, carryOutAction]);
 
-  const setIsMovingRobber = useCallback(() => {
-    dispatch({ type: ACTIONS.SET_IS_MOVING_ROBBER });
-  }, [dispatch]);
   const rollAction = carryOutAction([humanColor, "ROLL", null]);
   const endTurnAction = carryOutAction([humanColor, "END_TURN", null]);
 
@@ -332,9 +328,7 @@ function PlayButtons() {
         onClick={
           isDiscard
             ? handleOpenDiscardPlanner
-            : isMoveRobber
-              ? setIsMovingRobber
-              : isPlayingYearOfPlenty || isPlayingMonopoly
+            : isPlayingYearOfPlenty || isPlayingMonopoly
                 ? handleOpenResourceSelector
                 : isRoll
                   ? undefined
@@ -343,9 +337,7 @@ function PlayButtons() {
       >
         {isDiscard
           ? "DISCARD"
-          : isMoveRobber
-            ? "ROB"
-            : isPlayingYearOfPlenty || isPlayingMonopoly
+          : isPlayingYearOfPlenty || isPlayingMonopoly
               ? "SELECT"
               : isRoll
                 ? "ROLLING"

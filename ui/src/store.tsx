@@ -13,7 +13,6 @@ export type CatanState = {
   isPlayingMonopoly: boolean;
   isPlayingYearOfPlenty: boolean;
   isRoadBuilding: boolean;
-  isMovingRobber: boolean;
 };
 type ReducerAction = {
   type: keyof typeof ACTIONS;
@@ -32,7 +31,6 @@ const initialState: CatanState = {
   isPlayingYearOfPlenty: false,
   isRoadBuilding: false,
   freeRoadsAvailable: 0,
-  isMovingRobber: false,
 } as const;
 
 const store = createContext<{
@@ -64,7 +62,6 @@ const StateProvider = ({ children }: { children: React.ReactNode }) => {
               : 0,
             isPlayingMonopoly: false,
             isPlayingYearOfPlenty: false,
-            isMovingRobber: false,
           };
         case ACTIONS.TOGGLE_BUILDING_ROAD:
           return { ...state, isBuildingRoad: !state.isBuildingRoad };
@@ -86,8 +83,6 @@ const StateProvider = ({ children }: { children: React.ReactNode }) => {
             isRoadBuilding: true,
             freeRoadsAvailable: 2,
           };
-        case ACTIONS.SET_IS_MOVING_ROBBER:
-          return { ...state, isMovingRobber: true };
         default:
           throw new Error("Unknown Reducer Action: " + action.type);
       }

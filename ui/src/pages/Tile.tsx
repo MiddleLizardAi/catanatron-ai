@@ -180,7 +180,7 @@ export default function Tile({
   return (
     <div
       key={coordinate}
-      className="tile"
+      className={cn("tile", { "tile--robber-target": flashing })}
       style={{
         left: x - w / 2,
         top: y - h / 2,
