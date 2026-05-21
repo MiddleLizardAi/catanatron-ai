@@ -84,6 +84,29 @@
 }
 
 // ===== Tiles
+.sand-continent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.sand-continent__shape {
+  opacity: 0.94;
+  stroke: rgba(255, 231, 160, 0.42);
+  stroke-width: 22;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  paint-order: stroke fill;
+}
+
+.sand-continent__grain {
+  opacity: 0.48;
+  mix-blend-mode: soft-light;
+}
+
 .tile {
   position: absolute;
   display: flex;
