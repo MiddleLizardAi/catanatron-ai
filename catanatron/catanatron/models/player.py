@@ -1,6 +1,7 @@
 import random
 import builtins
 import json
+import time
 import urllib.request
 
 from enum import Enum
@@ -116,7 +117,7 @@ class WebHookPlayer(Player):
             "current_prompt": game.state.current_prompt.value,
             "legal_actions": legal_actions,
             "playable_actions": [self._action_to_json(action) for action in playable_actions],
-            "strategy": self._strategy_to_json(game, legal_actions),
+            "strategy": self._strategy_to_json(game, legal_actions, playable_actions),
             "state": self._state_to_json(game),
         }
 
@@ -182,7 +183,7 @@ class WebHookPlayer(Player):
             WebHookPlayer._json_value(action.value),
         ]
 
-    def _strategy_to_json(self, game, legal_actions):
+    def _strategy_to_json(self, game, legal_actions, playable_actions=None):
         from catanatron.state_functions import (
             get_actual_victory_points,
             get_visible_victory_points,
@@ -250,19 +251,196 @@ class WebHookPlayer(Player):
             },
             "priorities": [
                 "Roll immediately when ROLL is legal.",
-                "During setup, choose high-probability settlement production with diverse resources.",
-                "Prefer cities when affordable and ore/wheat production is useful.",
-                "Prefer settlements before speculative roads.",
+                "During setup, evaluate both starting settlements as one engine: seek strong dice numbers plus at least four resource types, with a concrete plan for any missing resource.",
+                "Choose an opening archetype from the board: expansion/road when wood+brick are strong, city/development when ore+wheat+sheep are strong, hybrid when both are available.",
+                "Do not overvalue a single high-production resource pile. A hand full of one resource is weak unless a matching port or trade plan is already reachable.",
+                "Prefer settlements early when legal because more production and resource coverage beat waiting passively for a perfect city.",
+                "Prefer cities when affordable on strong production, especially wheat/ore/sheep, but do not ignore expansion tempo.",
                 "Use the robber against the public leader or the strongest production tile.",
-                "Buy development cards when city/settlement progress is unavailable.",
-                "End the turn only when no useful build, trade, or development action is legal.",
+                "Buy development cards when city/settlement progress is unavailable and the hand supports ore+wheat+sheep.",
+                "Use maritime trades to convert surplus into missing build resources, especially before ending with more than seven cards.",
+                "Build roads only when they unlock a reachable settlement, port, or real longest-road plan.",
+                "After the opening two roads, do not build another road unless it directly opens a legal settlement spot and the settlement is already buildable or one resource away. Otherwise prefer settlement, city, targeted trade, development card, or end turn.",
+                "Do not chase Longest Road before 8+ actual victory points unless the road also creates a near-term settlement. Roads without new buildings are usually lost tempo.",
+                "At 8+ actual victory points, switch to endgame mode: choose the shortest route to 10 VP instead of general production. Prefer direct city/settlement, then Longest Road if it can flip, then development cards for hidden VP.",
+                "If settlement/city pieces are exhausted, do not trade for those plans; convert surplus toward development cards or Longest Road only.",
+                "End the turn when no useful build, targeted trade, or development action is legal.",
             ],
             "public_leader": public_leader,
             "self": next(player for player in visible_players if player["is_self"]),
             "players": visible_players,
             "legal_action_count": len(legal_actions),
             "legal_action_type_counts": action_type_counts,
+            "catanatron_search": self._catanatron_search_to_json(
+                game,
+                legal_actions,
+                playable_actions or game.playable_actions,
+            ),
+            "catanatron_teacher": self._catanatron_teacher_to_json(
+                game,
+                legal_actions,
+                playable_actions or game.playable_actions,
+            ),
         }
+
+    def _catanatron_search_to_json(self, game, legal_actions, playable_actions):
+        """Expose Catanatron's own AlphaBeta recommendation to webhook strategies."""
+        try:
+            from catanatron.players.minimax import (
+                AlphaBetaPlayer,
+                DebugStateNode,
+                MAX_SEARCH_TIME_SECS,
+            )
+            from catanatron.players.value import DEFAULT_WEIGHTS
+
+            depth = 2
+            prunning = True
+            search_player = AlphaBetaPlayer(
+                self.color,
+                depth=depth,
+                prunning=prunning,
+                value_fn_builder_name="base_fn",
+                params=DEFAULT_WEIGHTS,
+            )
+            start = time.time()
+            node = DebugStateNode(
+                str(len(game.state.action_records)),
+                self.color,
+            )
+            action, value = search_player.alphabeta(
+                game.copy(),
+                depth,
+                float("-inf"),
+                float("inf"),
+                start + MAX_SEARCH_TIME_SECS,
+                node,
+            )
+
+            action_scores = []
+            for child in node.children:
+                row = self._action_json_row_for_action(
+                    child.action,
+                    legal_actions,
+                    playable_actions,
+                )
+                if row is None:
+                    continue
+                row["score"] = self._finite_float(child.expected_value)
+                row["alpha_beta_scored"] = True
+                action_scores.append(row)
+
+            scored_ids = {row["id"] for row in action_scores if row.get("id") is not None}
+            for index, _action in enumerate(playable_actions):
+                row = {
+                    key: legal_actions[index][key]
+                    for key in ("id", "index", "type", "value")
+                }
+                if row["id"] in scored_ids:
+                    continue
+                row["score"] = None
+                row["alpha_beta_scored"] = False
+                action_scores.append(row)
+
+            recommended = self._action_json_row_for_action(
+                action,
+                legal_actions,
+                playable_actions,
+            )
+            if recommended is not None:
+                recommended["score"] = self._finite_float(value)
+                recommended["alpha_beta_scored"] = True
+
+            return {
+                "source": "catanatron.players.minimax.AlphaBetaPlayer",
+                "depth": depth,
+                "prunning": prunning,
+                "value_fn": "base_fn",
+                "timeout_seconds": MAX_SEARCH_TIME_SECS,
+                "elapsed_ms": round((time.time() - start) * 1000, 3),
+                "leaf_weights": DEFAULT_WEIGHTS,
+                "recommended_action": recommended,
+                "action_scores": action_scores,
+            }
+        except Exception as exc:
+            return {"source": "catanatron search unavailable", "error": str(exc)}
+
+    def _catanatron_teacher_to_json(self, game, legal_actions, playable_actions):
+        """Expose Catanatron's cheap value-function opinion to webhook strategies.
+
+        AlphaBetaPlayer uses the same value function at search leaves. Running full
+        depth-2 AlphaBeta inside every webhook payload would make live games feel
+        sluggish, so this exports one-ply expected value scores instead.
+        """
+        try:
+            from catanatron.players.tree_search_utils import (
+                execute_spectrum,
+                list_prunned_actions,
+            )
+            from catanatron.players.value import DEFAULT_WEIGHTS, get_value_fn
+
+            value_fn = get_value_fn("base_fn", DEFAULT_WEIGHTS)
+            pruned_actions = set(list_prunned_actions(game))
+            action_scores = []
+
+            for index, action in enumerate(playable_actions):
+                row = {
+                    key: legal_actions[index][key]
+                    for key in ("id", "index", "type", "value")
+                }
+                row["pruned"] = action not in pruned_actions
+                try:
+                    outcomes = execute_spectrum(game, action)
+                    score = sum(
+                        probability * value_fn(outcome, self.color)
+                        for outcome, probability in outcomes
+                    )
+                    row["score"] = self._finite_float(score)
+                except Exception as exc:
+                    row["score"] = None
+                    row["error"] = str(exc)
+                action_scores.append(row)
+
+            ranked = sorted(
+                [
+                    row
+                    for row in action_scores
+                    if row.get("score") is not None
+                    and (not row.get("pruned") or len(pruned_actions) == 0)
+                ],
+                key=lambda row: row["score"],
+                reverse=True,
+            )
+            return {
+                "source": "catanatron.players.value.base_fn one-ply expected value",
+                "alpha_beta_leaf_weights": DEFAULT_WEIGHTS,
+                "recommended_action": ranked[0] if ranked else None,
+                "action_scores": action_scores,
+            }
+        except Exception as exc:
+            return {"source": "catanatron teacher unavailable", "error": str(exc)}
+
+    @staticmethod
+    def _action_json_row_for_action(action, legal_actions, playable_actions):
+        if action is None:
+            return None
+        for index, candidate in enumerate(playable_actions):
+            if candidate != action:
+                continue
+            return {
+                key: legal_actions[index][key]
+                for key in ("id", "index", "type", "value")
+            }
+        return None
+
+    @staticmethod
+    def _finite_float(value):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        if value == float("inf") or value == float("-inf") or value != value:
+            return None
+        return round(value, 6)
 
     def _state_to_json(self, game):
         state = game.state
@@ -328,14 +506,22 @@ class WebHookPlayer(Player):
             "robber_coordinate": self._json_value(state.board.robber_coordinate),
             "action_records": [
                 [self._action_to_json(action), self._json_value(result)]
-                for action, result in state.action_records[-20:]
+                for action, result in state.action_records
             ],
         }
 
     def _tile_to_json(self, tile):
+        if not hasattr(tile, "id"):
+            return {"type": "WATER"}
+
+        base = {
+            "id": tile.id,
+            "nodes": self._json_value(tile.nodes),
+            "edges": self._json_value(tile.edges),
+        }
         if hasattr(tile, "direction"):
             return {
-                "id": tile.id,
+                **base,
                 "type": "PORT",
                 "direction": self._json_value(tile.direction),
                 "resource": self._json_value(tile.resource),
@@ -344,9 +530,9 @@ class WebHookPlayer(Player):
         if hasattr(tile, "resource"):
             resource = self._json_value(tile.resource)
             if resource is None:
-                return {"id": tile.id, "type": "DESERT"}
+                return {**base, "type": "DESERT"}
             return {
-                "id": tile.id,
+                **base,
                 "type": "RESOURCE_TILE",
                 "resource": resource,
                 "number": tile.number,
