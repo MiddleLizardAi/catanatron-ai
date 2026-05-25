@@ -49,7 +49,6 @@ export default function DiceRoll({ values }: DiceRollProps) {
 
   return (
     <div className="dice-roll" aria-label={`Dice roll ${firstDie + secondDie}`}>
-      <span className="dice-roll__label">Roll {firstDie + secondDie}</span>
       <Die color="yellow" value={firstDie} rolling={isRolling} />
       <Die color="red" value={secondDie} rolling={isRolling} />
     </div>

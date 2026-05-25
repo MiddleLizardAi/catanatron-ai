@@ -2,23 +2,13 @@ import cn from "classnames";
 import Paper from "@mui/material/Paper";
 
 import "./Tile.scss";
-import brickTile from "../assets/tile_brick.png";
-import desertTile from "../assets/tile_desert.png";
-import grainTile from "../assets/tile_wheat.png";
-import lumberTile from "../assets/tile_wood.png";
-import oreTile from "../assets/tile_ore.png";
-import woolTile from "../assets/tile_sheep.png";
-import maritimeTile from "../assets/tile_maritime.png";
-import number2 from "../assets/numbers/2.circle.fill.svg";
-import number3 from "../assets/numbers/3.circle.fill.svg";
-import number4 from "../assets/numbers/4.circle.fill.svg";
-import number5 from "../assets/numbers/5.circle.fill.svg";
-import number6 from "../assets/numbers/6.circle.fill.svg";
-import number8 from "../assets/numbers/8.circle.fill.svg";
-import number9 from "../assets/numbers/9.circle.fill.svg";
-import number10 from "../assets/numbers/10.circle.fill.svg";
-import number11 from "../assets/numbers/11.circle.fill.svg";
-import number12 from "../assets/numbers/12.circle.fill.svg";
+import brickTile from "../assets/tile_brick_512.webp";
+import desertTile from "../assets/tile_desert_512.webp";
+import grainTile from "../assets/tile_wheat_512.webp";
+import lumberTile from "../assets/tile_wood_512.webp";
+import oreTile from "../assets/tile_ore_512.webp";
+import woolTile from "../assets/tile_sheep_512.webp";
+import maritimeTile from "../assets/tile_maritime_512.webp";
 import { SQRT3, tilePixelVector } from "../utils/coordinates";
 import {
   type Direction,
@@ -39,42 +29,22 @@ export function NumberToken({
   style,
   flashing,
 }: NumberTokenProps) {
-  const tokenImage = NUMBER_TOKEN_IMAGES[number];
-
   return (
     <Paper
       elevation={3}
       className={cn("number-token", className, { flashing })}
       style={style}
     >
-      {tokenImage && (
-        <span
-          className={cn(
-            "number-token__disc",
-            number === 6 || number === 8
-              ? "number-token__disc--red"
-              : "number-token__disc--black"
-          )}
-        >
-          <img src={tokenImage} alt={number.toString()} />
-        </span>
-      )}
+      <span
+        className={cn("number-token__disc", {
+          "number-token__disc--red": number === 6 || number === 8,
+        })}
+      >
+        {number}
+      </span>
     </Paper>
   );
 }
-
-const NUMBER_TOKEN_IMAGES: Record<number, string> = {
-  2: number2,
-  3: number3,
-  4: number4,
-  5: number5,
-  6: number6,
-  8: number8,
-  9: number9,
-  10: number10,
-  11: number11,
-  12: number12,
-};
 
 const RESOURCES: { [K in ResourceCard]: string } = {
   BRICK: brickTile,
@@ -180,13 +150,16 @@ export default function Tile({
   return (
     <div
       key={coordinate}
-      className={cn("tile", { "tile--robber-target": flashing })}
+      className={cn("tile", {
+        "tile--desert": tile.type === "DESERT",
+        "tile--robber-target": flashing,
+      })}
       style={{
         left: x - w / 2,
         top: y - h / 2,
         width: w,
         height: h,
-        backgroundImage: `url("${resourceTile}")`,
+        backgroundImage: resourceTile ? `url("${resourceTile}")` : undefined,
         backgroundSize: "contain",
         backgroundRepeat: "no-repeat",
         backgroundPositionY: "6px",

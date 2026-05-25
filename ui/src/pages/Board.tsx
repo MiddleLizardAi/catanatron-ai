@@ -139,7 +139,7 @@ type BoardProps = {
   height: number;
   buildOnNodeClick: (id: number, action?: GameAction) => React.MouseEventHandler<HTMLDivElement>;
   buildOnEdgeClick: (id: [number, number], action?: GameAction) => React.MouseEventHandler<HTMLDivElement>;
-  handleTileClick: (coordinate: TileCoordinate) => void;
+  handleTileClick: (coordinate: TileCoordinate) => void | Promise<void>;
   nodeActions?: Record<number, GameAction>;
   edgeActions?: Record<EdgeId, GameAction>;
   replayMode: boolean;

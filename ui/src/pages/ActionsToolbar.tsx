@@ -30,7 +30,7 @@ import { store } from "../store";
 import ACTIONS from "../actions";
 import type { GameAction, ResourceCard } from "../utils/api.types"; // Add GameState to the import, adjust path if needed
 import { getHumanColor, playerKey } from "../utils/stateUtils";
-import { postAction } from "../utils/apiClient";
+import { getState, postAction } from "../utils/apiClient";
 import { humanizeTradeAction } from "../utils/promptUtils";
 import { useDiscardBatchSubmission } from "../hooks/useDiscardBatchSubmission";
 import { canLocalPlayerAct, localHumanColor } from "../utils/localPlayer";
@@ -59,13 +59,28 @@ function PlayButtons() {
   const [discardPlannerOpen, setDiscardPlannerOpen] = useState(false);
   const { isSubmitting, submitDiscardBatch } = useDiscardBatchSubmission();
 
+  const refreshLatestState = useCallback(async () => {
+    const latestState = await getState(gameId, "latest");
+    dispatch({ type: ACTIONS.SET_GAME_STATE, data: latestState });
+    dispatchSnackbar(enqueueSnackbar, closeSnackbar, latestState);
+  }, [gameId, dispatch, enqueueSnackbar, closeSnackbar]);
+
   const carryOutAction = useCallback(
     memoize((action?: GameAction) => async () => {
-      const gameState = await postAction(gameId, action);
-      dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-      dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+      try {
+        if (!action) {
+          await refreshLatestState();
+          return;
+        }
+        const gameState = await postAction(gameId, action);
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+        dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+      } catch (error) {
+        console.error("Failed to submit action; refreshing latest state", error);
+        await refreshLatestState();
+      }
     }),
-    [enqueueSnackbar, closeSnackbar],
+    [gameId, dispatch, enqueueSnackbar, closeSnackbar, refreshLatestState],
   );
 
   const {
@@ -82,12 +97,19 @@ function PlayButtons() {
     gameState.current_prompt === "PLAY_TURN" &&
     !gameState.player_state[`${key}_HAS_ROLLED`];
   const isDiscard = gameState.current_prompt === "DISCARD";
+  const isMovingRobber = gameState.current_prompt === "MOVE_ROBBER";
   const isPlayingDevCard =
     isPlayingMonopoly || isPlayingYearOfPlenty || isRoadBuilding;
-  const playableDevCardTypes = new Set(
-    gameState.current_playable_actions
-      .filter((action) => action[1].startsWith("PLAY"))
-      .map((action) => action[1]),
+  const playableAction = useCallback(
+    (actionType: string) =>
+      gameState.current_playable_actions.find((action) => action[1] === actionType),
+    [gameState.current_playable_actions],
+  );
+  const playableEndTurnAction = gameState.current_playable_actions.find(
+    (action) => action[1] === "END_TURN",
+  );
+  const playableRollAction = gameState.current_playable_actions.find(
+    (action) => action[1] === "ROLL",
   );
   const humanColor = localHumanColor(gameState, window.location.search) ?? getHumanColor(gameState);
   const discardActionType =
@@ -117,28 +139,32 @@ function PlayButtons() {
   const handleResourceSelection = useCallback(
     async (selectedResources: ResourceCard | ResourceCard[]) => {
       setResourceSelectorOpen(false);
-      let nextGameState;
-      let action: GameAction;
-      if (isPlayingMonopoly) {
-        action = [
-          humanColor,
-          "PLAY_MONOPOLY",
-          selectedResources as ResourceCard,
-        ];
-        nextGameState = await postAction(gameId, action);
-      } else if (isPlayingYearOfPlenty) {
-        action = [
-          humanColor,
-          "PLAY_YEAR_OF_PLENTY",
-          selectedResources as [ResourceCard] | [ResourceCard, ResourceCard],
-        ];
-        nextGameState = await postAction(gameId, action);
-      } else {
-        console.error("Invalid resource selector mode");
-        return;
+      try {
+        let action: GameAction;
+        if (isPlayingMonopoly) {
+          action = [
+            humanColor,
+            "PLAY_MONOPOLY",
+            selectedResources as ResourceCard,
+          ];
+        } else if (isPlayingYearOfPlenty) {
+          action = [
+            humanColor,
+            "PLAY_YEAR_OF_PLENTY",
+            selectedResources as [ResourceCard] | [ResourceCard, ResourceCard],
+          ];
+        } else {
+          console.error("Invalid resource selector mode");
+          await refreshLatestState();
+          return;
+        }
+        const nextGameState = await postAction(gameId, action);
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
+        dispatchSnackbar(enqueueSnackbar, closeSnackbar, nextGameState);
+      } catch (error) {
+        console.error("Failed to submit development-card action; refreshing latest state", error);
+        await refreshLatestState();
       }
-      dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
-      dispatchSnackbar(enqueueSnackbar, closeSnackbar, nextGameState);
     },
     [
       gameId,
@@ -148,6 +174,7 @@ function PlayButtons() {
       closeSnackbar,
       isPlayingMonopoly,
       isPlayingYearOfPlenty,
+      refreshLatestState,
     ],
   );
   const handleOpenResourceSelector = useCallback(() => {
@@ -159,14 +186,19 @@ function PlayButtons() {
   const handleDiscardSelection = useCallback(
     async (resources: ResourceCard[]) => {
       setDiscardPlannerOpen(false);
-      const nextGameState = await submitDiscardBatch({
-        discardActionType,
-        gameId,
-        humanColor,
-        resources,
-      });
-      dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
-      dispatchSnackbar(enqueueSnackbar, closeSnackbar, nextGameState);
+      try {
+        const nextGameState = await submitDiscardBatch({
+          discardActionType,
+          gameId,
+          humanColor,
+          resources,
+        });
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
+        dispatchSnackbar(enqueueSnackbar, closeSnackbar, nextGameState);
+      } catch (error) {
+        console.error("Failed to submit discard action; refreshing latest state", error);
+        await refreshLatestState();
+      }
     },
     [
       discardActionType,
@@ -176,43 +208,62 @@ function PlayButtons() {
       dispatch,
       enqueueSnackbar,
       closeSnackbar,
+      refreshLatestState,
     ],
   );
   const setIsPlayingYearOfPlenty = useCallback(() => {
     dispatch({ type: ACTIONS.SET_IS_PLAYING_YEAR_OF_PLENTY });
   }, [dispatch]);
   const playRoadBuilding = useCallback(async () => {
-    const action: GameAction = [humanColor, "PLAY_ROAD_BUILDING", null];
-    const gameState = await postAction(gameId, action);
-    dispatch({ type: ACTIONS.PLAY_ROAD_BUILDING });
-    dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-    dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
-  }, [gameId, dispatch, enqueueSnackbar, closeSnackbar, humanColor]);
+    const action = playableAction("PLAY_ROAD_BUILDING");
+    if (!action) {
+      await refreshLatestState();
+      return;
+    }
+    try {
+      const gameState = await postAction(gameId, action);
+      dispatch({ type: ACTIONS.PLAY_ROAD_BUILDING });
+      dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+    } catch (error) {
+      console.error("Failed to play road building; refreshing latest state", error);
+      await refreshLatestState();
+    }
+  }, [gameId, dispatch, enqueueSnackbar, closeSnackbar, playableAction, refreshLatestState]);
   const playKnightCard = useCallback(async () => {
-    const action: GameAction = [humanColor, "PLAY_KNIGHT_CARD", null];
-    const gameState = await postAction(gameId, action);
-    dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-    dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
-  }, [gameId, dispatch, enqueueSnackbar, closeSnackbar, humanColor]);
+    const action = playableAction("PLAY_KNIGHT_CARD");
+    if (!action) {
+      await refreshLatestState();
+      return;
+    }
+    try {
+      const gameState = await postAction(gameId, action);
+      dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+    } catch (error) {
+      console.error("Failed to play knight card; refreshing latest state", error);
+      await refreshLatestState();
+    }
+  }, [gameId, dispatch, enqueueSnackbar, closeSnackbar, playableAction, refreshLatestState]);
   const useItems = [
     {
       label: "Monopoly",
-      disabled: !playableDevCardTypes.has("PLAY_MONOPOLY"),
+      disabled: !playableAction("PLAY_MONOPOLY"),
       onClick: setIsPlayingMonopoly,
     },
     {
       label: "Year of Plenty",
-      disabled: !playableDevCardTypes.has("PLAY_YEAR_OF_PLENTY"),
+      disabled: !playableAction("PLAY_YEAR_OF_PLENTY"),
       onClick: setIsPlayingYearOfPlenty,
     },
     {
       label: "Road Building",
-      disabled: !playableDevCardTypes.has("PLAY_ROAD_BUILDING"),
+      disabled: !playableAction("PLAY_ROAD_BUILDING"),
       onClick: playRoadBuilding,
     },
     {
       label: "Knight",
-      disabled: !playableDevCardTypes.has("PLAY_KNIGHT_CARD"),
+      disabled: !playableAction("PLAY_KNIGHT_CARD"),
       onClick: playKnightCard,
     },
   ];
@@ -227,12 +278,28 @@ function PlayButtons() {
           )
           .map((a) => a[1]),
   );
+  const buyDevelopmentCardAction = playableAction("BUY_DEVELOPMENT_CARD");
   const buyDevCard = useCallback(async () => {
-    const action: GameAction = [humanColor, "BUY_DEVELOPMENT_CARD", null];
-    const gameState = await postAction(gameId, action);
-    dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-    dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
-  }, [gameId, dispatch, enqueueSnackbar, closeSnackbar, humanColor]);
+    if (!buyDevelopmentCardAction) {
+      await refreshLatestState();
+      return;
+    }
+    try {
+      const gameState = await postAction(gameId, buyDevelopmentCardAction);
+      dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+    } catch (error) {
+      console.error("Failed to buy development card; refreshing latest state", error);
+      await refreshLatestState();
+    }
+  }, [
+    gameId,
+    buyDevelopmentCardAction,
+    dispatch,
+    enqueueSnackbar,
+    closeSnackbar,
+    refreshLatestState,
+  ]);
   const setIsBuildingSettlement = useCallback(() => {
     dispatch({ type: ACTIONS.SET_IS_BUILDING_SETTLEMENT });
   }, [dispatch]);
@@ -245,7 +312,7 @@ function PlayButtons() {
   const buildItems = [
     {
       label: "Development Card",
-      disabled: !buildActionTypes.has("BUY_DEVELOPMENT_CARD"),
+      disabled: !buyDevelopmentCardAction,
       onClick: buyDevCard,
     },
     {
@@ -281,8 +348,10 @@ function PlayButtons() {
     return items.sort((a, b) => a.label.localeCompare(b.label));
   }, [tradeActions, carryOutAction]);
 
-  const rollAction = carryOutAction([humanColor, "ROLL", null]);
-  const endTurnAction = carryOutAction([humanColor, "END_TURN", null]);
+  const rollAction = carryOutAction(playableRollAction ?? [humanColor, "ROLL", null]);
+  const endTurnAction = carryOutAction(playableEndTurnAction);
+  const hasPlayableDevCardAction = useItems.some((item) => !item.disabled);
+  const hasPlayableBuildAction = buildItems.some((item) => !item.disabled);
 
   useEffect(() => {
     if (isRoll && humanColor === gameState.current_color) {
@@ -293,7 +362,7 @@ function PlayButtons() {
   return (
     <>
       <OptionsButton
-        disabled={playableDevCardTypes.size === 0 || isPlayingDevCard}
+        disabled={!hasPlayableDevCardAction || isPlayingDevCard}
         menuListId="use-menu-list"
         icon={<SimCardIcon />}
         items={useItems}
@@ -301,7 +370,7 @@ function PlayButtons() {
         Use
       </OptionsButton>
       <OptionsButton
-        disabled={buildActionTypes.size === 0 || isPlayingDevCard}
+        disabled={!hasPlayableBuildAction || isPlayingDevCard}
         menuListId="build-menu-list"
         icon={<BuildIcon />}
         items={buildItems}
@@ -320,7 +389,13 @@ function PlayButtons() {
         disabled={
           gameState.is_initial_build_phase ||
           isRoadBuilding ||
-          isSubmitting
+          isSubmitting ||
+          isMovingRobber ||
+          (!isDiscard &&
+            !isPlayingYearOfPlenty &&
+            !isPlayingMonopoly &&
+            !isRoll &&
+            !playableEndTurnAction)
         }
         variant="contained"
         color="primary"
@@ -337,7 +412,9 @@ function PlayButtons() {
       >
         {isDiscard
           ? "DISCARD"
-          : isPlayingYearOfPlenty || isPlayingMonopoly
+          : isMovingRobber
+            ? "ROBBER"
+            : isPlayingYearOfPlenty || isPlayingMonopoly
               ? "SELECT"
               : isRoll
                 ? "ROLLING"
@@ -467,7 +544,7 @@ function OptionsButton({
   disabled,
 }: OptionsButtonProps) {
   const [open, setOpen] = useState(false);
-  const anchorRef = useRef<HTMLAnchorElement>(null);
+  const anchorRef = useRef<HTMLButtonElement>(null);
 
   const handleToggle = () => {
     setOpen((prevOpen) => !prevOpen);
@@ -506,7 +583,6 @@ function OptionsButton({
       <Button
         disabled={disabled}
         ref={anchorRef}
-        href="#"
         aria-controls={open ? menuListId : undefined}
         aria-haspopup="true"
         variant="contained"

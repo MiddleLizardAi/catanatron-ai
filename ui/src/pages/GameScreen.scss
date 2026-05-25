@@ -42,7 +42,7 @@ h6.MuiTypography-h6 {
   }
 }
 
-main {
+main.game-screen {
   .logo {
     margin: 5px 20px 0 20px;
     text-align: center;
@@ -137,7 +137,16 @@ main {
     background: rgba(255, 255, 255, 0.24);
   }
 
-  background: variables.$black;
+  background:
+    radial-gradient(ellipse at 48% 42%, rgba(89, 213, 238, 0.78) 0%, rgba(56, 183, 223, 0.5) 36%, transparent 64%),
+    radial-gradient(ellipse at 52% 18%, rgba(255, 255, 255, 0.24) 0%, transparent 30%),
+    radial-gradient(ellipse at 12% 18%, rgba(255, 255, 255, 0.12) 0%, transparent 34%),
+    linear-gradient(rgba(41, 171, 218, 0.08), rgba(16, 117, 182, 0.16)),
+    url("../assets/water_texture.svg"),
+    linear-gradient(180deg, #38bde2 0%, #22a9d6 48%, #1682bd 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, no-repeat;
+  background-size: auto, auto, auto, auto, 256px 256px, auto;
   color: white;
   height: 100%;
   display: flex;

@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { useParams } from "react-router-dom";
 import PropTypes from "prop-types";
 import { GridLoader } from "react-spinners";
@@ -21,12 +21,18 @@ import JoinLinks from "../components/JoinLinks";
 import DiceRoll from "../components/DiceRoll";
 
 const ROBOT_THINKING_TIME = 300;
+const LATEST_STATE_POLL_INTERVAL = 1500;
 
 function GameScreen({ replayMode }: { replayMode: boolean }) {
   const { gameId, stateIndex } = useParams();
   const { state, dispatch } = useContext(store);
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const [isBotThinking, setIsBotThinking] = useState(false);
+  const latestStateIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    latestStateIndexRef.current = state.gameState?.state_index ?? null;
+  }, [state.gameState?.state_index]);
 
   // Load game state
   useEffect(() => {
@@ -35,10 +41,37 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
     }
 
     (async () => {
-      const gameState = await getState(gameId, stateIndex as StateIndex);
-      dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      try {
+        const gameState = await getState(gameId, stateIndex as StateIndex);
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      } catch (error) {
+        console.error("Failed to load game state", error);
+      }
     })();
   }, [gameId, stateIndex, dispatch]);
+
+  useEffect(() => {
+    if (!gameId || replayMode || stateIndex) {
+      return;
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const latestState = await getState(gameId, "latest");
+        const currentStateIndex = latestStateIndexRef.current;
+        if (
+          currentStateIndex === null ||
+          latestState.state_index > currentStateIndex
+        ) {
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: latestState });
+        }
+      } catch (error) {
+        console.error("Failed to refresh latest game state", error);
+      }
+    }, LATEST_STATE_POLL_INTERVAL);
+
+    return () => window.clearInterval(intervalId);
+  }, [gameId, replayMode, stateIndex, dispatch]);
 
   // Maybe kick off next query?
   useEffect(() => {
@@ -52,17 +85,22 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
       // Make bot click next action.
       (async () => {
         setIsBotThinking(true);
-        const start = new Date();
-        const gameState = await postAction(gameId);
-        const requestTime = new Date().valueOf() - start.valueOf();
-        setTimeout(() => {
-          // simulate thinking
+        try {
+          const start = new Date();
+          const gameState = await postAction(gameId);
+          const requestTime = new Date().valueOf() - start.valueOf();
+          window.setTimeout(() => {
+            // simulate thinking
+            setIsBotThinking(false);
+            dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+            if (getHumanColor(gameState)) {
+              dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+            }
+          }, Math.max(0, ROBOT_THINKING_TIME - requestTime));
+        } catch (error) {
+          console.error("Failed to advance bot action", error);
           setIsBotThinking(false);
-          dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-          if (getHumanColor(gameState)) {
-            dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
-          }
-        }, ROBOT_THINKING_TIME - requestTime);
+        }
       })();
     }
   }, [
@@ -76,7 +114,7 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
 
   if (!state.gameState) {
     return (
-      <main>
+      <main className="game-screen">
         <GridLoader
           className="loader"
           color="#000000"
@@ -93,7 +131,7 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   const diceValues = lastRollRecord ? lastRollRecord[1] as [number, number] : null;
 
   return (
-    <main>
+    <main className="game-screen">
       <h1 className="logo">Catanatron</h1>
       {gameId ? <JoinLinks gameId={gameId} gameState={state.gameState} /> : null}
       <DiceRoll values={diceValues} />

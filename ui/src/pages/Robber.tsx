@@ -3,7 +3,6 @@ import {
   tilePixelVector,
   type CubeCoordinate,
 } from "../utils/coordinates";
-import robberIcon from "../assets/icons/figure.and.child.holdinghands.svg";
 
 type RobberProps = {
   center: [number, number];
@@ -25,11 +24,14 @@ export default function Robber({ center, size, coordinate }: RobberProps) {
       style={{
         left: x,
         top: y,
-        width: size * 0.55,
-        height: size * 0.62,
+        width: size * 0.43,
+        height: size * 0.5,
       }}
+      aria-label="Robber"
     >
-      <img src={robberIcon} alt="Robber" />
+      <span className="robber__head" />
+      <span className="robber__body" />
+      <span className="robber__base" />
     </div>
   );
 }

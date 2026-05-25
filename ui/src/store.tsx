@@ -48,6 +48,12 @@ const StateProvider = ({ children }: { children: React.ReactNode }) => {
         case ACTIONS.SET_RIGHT_DRAWER_OPENED:
           return { ...state, isRightDrawerOpen: action.data };
         case ACTIONS.SET_GAME_STATE:
+          if (
+            state.gameState &&
+            action.data?.state_index < state.gameState.state_index
+          ) {
+            return state;
+          }
           return {
             ...state,
             gameState: action.data,

@@ -10,7 +10,13 @@ type BuildingProps<T = Color | null> = {
 
 function Building({ building, color }: BuildingProps) {
   const type = building === "CITY" ? "city" : "settlement";
-  return <div className={cn(color, type)} />;
+  return (
+    <div className={cn("building", color, type)}>
+      <span className="building__roof" />
+      <span className="building__body" />
+      {building === "CITY" && <span className="building__tower" />}
+    </div>
+  );
 }
 
 type NodeProps = {

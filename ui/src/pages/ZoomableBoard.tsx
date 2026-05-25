@@ -8,7 +8,7 @@ import useWindowSize from "../utils/useWindowSize";
 import "./Board.scss";
 import { store } from "../store";
 import { isPlayersTurn } from "../utils/stateUtils";
-import { postAction } from "../utils/apiClient";
+import { getState, postAction } from "../utils/apiClient";
 import type { CatanState } from "../store";
 import { useParams } from "react-router";
 import ACTIONS from "../actions";
@@ -106,28 +106,40 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
     memoize((id, action) => async () => {
       console.log("Clicked Node ", id, action);
       if (action) {
-        const gameState = await postAction(gameId, action);
-        dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+        try {
+          const gameState = await postAction(gameId, action);
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+        } catch (error) {
+          console.error("Failed to submit node action; refreshing latest state", error);
+          const latestState = await getState(gameId, "latest");
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: latestState });
+        }
       }
     }),
-    []
+    [gameId, dispatch]
   );
   const buildOnEdgeClick = useCallback(
     memoize((id, action) => async () => {
       console.log("Clicked Edge ", id, action);
       if (action) {
-        const gameState = await postAction(gameId, action);
-        dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+        try {
+          const gameState = await postAction(gameId, action);
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+        } catch (error) {
+          console.error("Failed to submit edge action; refreshing latest state", error);
+          const latestState = await getState(gameId, "latest");
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: latestState });
+        }
       }
     }),
-    []
+    [gameId, dispatch]
   );
   const isMoveRobberPrompt =
     !replayMode &&
     gameState.current_prompt === "MOVE_ROBBER" &&
     canLocalPlayerAct(gameState, window.location.search);
   const handleTileClick = useCallback(
-    memoize((coordinate: TileCoordinate) => {
+    memoize(async (coordinate: TileCoordinate) => {
       console.log("Clicked Tile ", coordinate);
       if (isMoveRobberPrompt) {
         // Find the "MOVE_ROBBER" action in current_playable_actions that
@@ -140,9 +152,17 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
             ),
         );
         if (matchingAction) {
-          postAction(gameId, matchingAction).then((gameState) => {
+          try {
+            const gameState = await postAction(gameId, matchingAction);
             dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-          });
+          } catch (error) {
+            console.error("Failed to submit robber action; refreshing latest state", error);
+            const latestState = await getState(gameId, "latest");
+            dispatch({ type: ACTIONS.SET_GAME_STATE, data: latestState });
+          }
+        } else {
+          const latestState = await getState(gameId, "latest");
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: latestState });
         }
       }
     }),

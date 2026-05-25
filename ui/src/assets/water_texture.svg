@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <pattern id="soft-waves" width="256" height="64" patternUnits="userSpaceOnUse">
+      <path d="M-64 21C-22 7 12 7 54 21s76 14 118 0 76-14 118 0" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1.1"/>
+      <path d="M-50 40C-8 30 24 30 66 40s74 10 116 0 74-10 116 0" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.9"/>
+    </pattern>
+    <pattern id="small-ripple" width="128" height="48" patternUnits="userSpaceOnUse">
+      <path d="M-32 18C-8 12 10 12 34 18s42 6 66 0 42-6 66 0" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+    </pattern>
+  </defs>
+  <rect width="256" height="256" fill="url(#soft-waves)" opacity="0.7"/>
+  <rect width="256" height="256" fill="url(#small-ripple)" opacity="0.55"/>
+</svg>

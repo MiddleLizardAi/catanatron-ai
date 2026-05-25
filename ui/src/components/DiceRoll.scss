@@ -1,25 +1,12 @@
 .dice-roll {
   position: fixed;
-  top: 86px;
+  top: 58px;
   right: 18px;
   z-index: 1102;
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
-  background: rgba(18, 18, 18, 0.92);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  gap: 0.5rem;
   pointer-events: none;
-}
-
-.dice-roll__label {
-  color: white;
-  font-size: 0.82rem;
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
 }
 
 .dice-roll__die {

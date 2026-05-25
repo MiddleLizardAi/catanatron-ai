@@ -62,25 +62,57 @@
 .robber {
   position: absolute;
   z-index: 18;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  border-radius: 50% 50% 45% 45%;
-  background:
-    radial-gradient(circle at 50% 32%, rgba(255, 255, 255, 0.24), transparent 26%),
-    linear-gradient(180deg, #151515 0%, #050505 100%);
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, 0.55),
-    0 8px 16px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.5));
 }
 
-.robber img {
+.robber__head,
+.robber__body,
+.robber__base {
+  position: absolute;
   display: block;
+  left: 50%;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(circle at 36% 24%, rgba(255, 255, 255, 0.1) 0%, transparent 24%),
+    linear-gradient(90deg, #090909 0%, #202020 48%, #090909 100%);
+  border: 1px solid rgba(0, 0, 0, 0.82);
+}
+
+.robber__head {
+  top: 2%;
+  width: 58%;
+  height: 38%;
+  border-radius: 48% 48% 42% 42% / 58% 58% 38% 38%;
+  box-shadow:
+    inset -4px 0 6px rgba(0, 0, 0, 0.36),
+    inset 4px 0 8px rgba(255, 255, 255, 0.035);
+}
+
+.robber__body {
+  top: 31%;
   width: 72%;
-  height: 72%;
-  filter: invert(1);
-  opacity: 0.94;
+  height: 51%;
+  border-radius: 43% 43% 35% 35% / 16% 16% 48% 48%;
+  background:
+    radial-gradient(ellipse at 39% 34%, rgba(255, 255, 255, 0.08) 0%, transparent 32%),
+    linear-gradient(90deg, #080808 0%, #232323 52%, #080808 100%);
+  box-shadow:
+    inset -5px 0 8px rgba(0, 0, 0, 0.42),
+    inset 5px 0 8px rgba(255, 255, 255, 0.025);
+}
+
+.robber__base {
+  bottom: 0;
+  width: 84%;
+  height: 22%;
+  border-radius: 50% / 24%;
+  background:
+    radial-gradient(ellipse at 50% 15%, rgba(255, 255, 255, 0.06) 0%, transparent 42%),
+    linear-gradient(90deg, #070707 0%, #202020 50%, #070707 100%);
+  box-shadow:
+    inset 0 3px 3px rgba(255, 255, 255, 0.035),
+    inset 0 -5px 5px rgba(0, 0, 0, 0.48);
 }
 
 // ===== Tiles
@@ -113,6 +145,7 @@
   justify-content: center;
   align-items: center;
   transform: scale(1.02);
+  z-index: 4;
 }
 
 // ===== Edges
@@ -122,13 +155,73 @@
   justify-content: center;
   height: 12px;
   pointer-events: none;
+  z-index: 9;
 }
 .road {
   position: absolute;
-  border: 1px solid variables.$dark-gray;
   width: 100%;
   height: 100%;
-  border-radius: 2px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  background:
+    radial-gradient(ellipse 58% 48% at 18% 54%, rgba(98, 63, 31, 0.2) 0%, transparent 62%),
+    radial-gradient(ellipse 42% 54% at 72% 45%, rgba(255, 232, 164, 0.16) 0%, transparent 66%),
+    repeating-linear-gradient(11deg, rgba(73, 45, 22, 0.22) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(96deg, rgba(255, 244, 197, 0.13) 0 1px, transparent 1px 11px),
+    linear-gradient(180deg, rgba(255, 236, 176, 0.18), transparent 48%, rgba(75, 45, 22, 0.24) 100%),
+    linear-gradient(90deg, color-mix(in srgb, currentColor 58%, #5b3c21 42%), color-mix(in srgb, currentColor 68%, #8a6435 32%) 52%, color-mix(in srgb, currentColor 54%, #4a2c18 46%));
+  background-size:
+    auto,
+    auto,
+    16px 12px,
+    18px 13px,
+    auto,
+    auto;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 238, 183, 0.18),
+    inset 0 -2px 2px rgba(59, 35, 18, 0.22),
+    0 2px 3px rgba(0, 0, 0, 0.24);
+}
+
+.road::before,
+.road::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.road::before {
+  background:
+    radial-gradient(circle at 18% 35%, rgba(44, 28, 15, 0.28) 0 0.8px, transparent 1.2px),
+    radial-gradient(circle at 42% 62%, rgba(255, 229, 164, 0.2) 0 0.8px, transparent 1.2px),
+    radial-gradient(circle at 70% 38%, rgba(52, 32, 16, 0.22) 0 0.8px, transparent 1.2px);
+  background-size: 15px 8px, 17px 9px, 19px 10px;
+  mix-blend-mode: multiply;
+  opacity: 0.46;
+}
+
+.road::after {
+  background:
+    linear-gradient(0deg, rgba(57, 34, 17, 0.22) 0 12%, transparent 16% 82%, rgba(255, 240, 184, 0.16) 88% 100%);
+  opacity: 0.58;
+}
+
+.BLUE.road {
+  color: variables.$blue;
+}
+
+.RED.road {
+  color: variables.$red;
+}
+
+.ORANGE.road {
+  color: variables.$orange;
+}
+
+.WHITE.road {
+  color: variables.$white;
 }
 
 .edge--active {
@@ -143,40 +236,128 @@
   position: absolute;
   height: 10px;
   width: 10px;
+  z-index: 12;
 
   display: flex;
   justify-content: center;
   align-items: center;
 }
 .settlement {
-  width: 80%;
-  height: 80%;
-  border-radius: 4px; // mimic Paper
-  border: 2px solid variables.$dark-gray;
+  width: 98%;
+  height: 88%;
 }
 
 .city {
-  width: 105%;
-  height: 105%;
-  border-radius: 4px;
-  border: 2px solid variables.$dark-gray;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  width: 134%;
+  height: 108%;
 }
 
-.BLUE.city {
-  background: variables.$blue;
+.building {
+  position: relative;
+  display: block;
+  background: transparent;
+  filter:
+    drop-shadow(0 2px 1px rgba(0, 0, 0, 0.58))
+    drop-shadow(0 0 1px rgba(0, 0, 0, 0.5));
 }
 
-.RED.city {
-  background: variables.$red;
+.RED.building,
+.BLUE.building,
+.ORANGE.building,
+.WHITE.building {
+  background: transparent;
 }
 
-.ORANGE.city {
-  background: variables.$orange;
+.building__roof,
+.building__body,
+.building__tower {
+  position: absolute;
+  display: block;
 }
 
-.WHITE.city {
-  background: variables.$white;
+.building__roof {
+  left: 11%;
+  top: 0;
+  width: 78%;
+  height: 44%;
+  clip-path: polygon(50% 0, 96% 100%, 4% 100%);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent 38%),
+    linear-gradient(180deg, currentColor, color-mix(in srgb, currentColor 72%, #000 28%));
+  border-radius: 2px 2px 0 0;
+}
+
+.building__body {
+  left: 20%;
+  bottom: 3%;
+  width: 60%;
+  height: 54%;
+  clip-path: polygon(7% 0, 93% 0, 100% 100%, 0 100%);
+  border-radius: 1px 1px 3px 3px;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.2), transparent 28%, rgba(255, 255, 255, 0.15) 52%, rgba(0, 0, 0, 0.24)),
+    currentColor;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+}
+
+.city .building__roof {
+  left: 7%;
+  top: 2%;
+  width: 63%;
+  height: 42%;
+}
+
+.city .building__body {
+  left: 8%;
+  width: 58%;
+  height: 62%;
+  clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%);
+}
+
+.city .building__tower {
+  right: 7%;
+  bottom: 3%;
+  width: 34%;
+  height: 72%;
+  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
+  border-radius: 1px 1px 3px 3px;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.24), transparent 34%, rgba(255, 255, 255, 0.12) 58%, rgba(0, 0, 0, 0.28)),
+    currentColor;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.24);
+}
+
+.city .building__tower::before {
+  content: "";
+  position: absolute;
+  left: -9%;
+  top: -34%;
+  width: 118%;
+  height: 45%;
+  clip-path: polygon(50% 0, 96% 100%, 4% 100%);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent 38%),
+    linear-gradient(180deg, currentColor, color-mix(in srgb, currentColor 72%, #000 28%));
+}
+
+.BLUE.building {
+  color: variables.$blue;
+}
+
+.RED.building {
+  color: variables.$red;
+}
+
+.ORANGE.building {
+  color: variables.$orange;
+}
+
+.WHITE.building {
+  color: variables.$white;
 }
 
 // Taken from https://codepen.io/peeke/pen/BjxXZa.
@@ -227,4 +408,8 @@
 .node .pulse {
   width: 75%;
   height: 75%;
+
+  &:after {
+    border-radius: 50%;
+  }
 }
