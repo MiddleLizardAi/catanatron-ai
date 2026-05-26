@@ -241,6 +241,20 @@ def road_debt_for_state(state, color, strategy):
     )
 
 
+def settlement_deficit_from_counts(counts):
+    return sum(
+        max(0, required - counts.get(resource, 0))
+        for resource, required in RESOURCE_COSTS["SETTLEMENT"].items()
+    )
+
+
+def counts_after_city_build(state, color):
+    counts = resource_counts(state, color)
+    for resource, amount in RESOURCE_COSTS["CITY"].items():
+        counts[resource] = max(0, counts.get(resource, 0) - amount)
+    return counts
+
+
 def needs_expansion_pressure(state, color, strategy):
     pieces = board_piece_counts(state, color)
     if player_state_value(state, color, "SETTLEMENTS_AVAILABLE", 0) <= 0:
@@ -256,6 +270,36 @@ def needs_expansion_pressure(state, color, strategy):
             and pieces["cities"] >= city_trigger
         )
     )
+
+
+def live_settlement_route_exists(
+    state,
+    color,
+    strategy,
+    counts=None,
+    max_missing=None,
+    min_route_score=None,
+):
+    reserve = strategy.get("settlement_reserve", {})
+    if player_state_value(state, color, "SETTLEMENTS_AVAILABLE", 0) <= 0:
+        return False
+
+    if counts is None:
+        counts = resource_counts(state, color)
+    if max_missing is None:
+        max_missing = reserve.get("max_settlement_missing", 2)
+    if settlement_deficit_from_counts(counts) > max_missing:
+        return False
+
+    route_score = best_route_target_score(state, color, strategy)
+    if route_score is None:
+        return False
+    if min_route_score is None:
+        min_route_score = reserve.get(
+            "min_route_score",
+            strategy.get("road", {}).get("settlement_target_min_score", 0),
+        )
+    return route_score >= min_route_score
 
 
 def settlement_missing_after_road(state, color):
@@ -481,6 +525,13 @@ def opponent_colors(state, color):
     return [candidate for candidate in state.get("colors", []) if candidate != color]
 
 
+def is_human_color(state, color):
+    return any(
+        player.get("color") == color and not player.get("is_bot", True)
+        for player in state.get("players", [])
+    )
+
+
 def settlement_target_contest_penalty(
     state,
     node_id,
@@ -543,8 +594,15 @@ def settlement_target_score(
     extra_edge=None,
     distance=None,
     spent_roads=0,
+    opening_resource_guard=True,
 ):
-    score = node_score(state, node_id, strategy, color)
+    score = node_score(
+        state,
+        node_id,
+        strategy,
+        color,
+        opening_resource_guard=opening_resource_guard,
+    )
     if color is None:
         return score
 
@@ -570,7 +628,13 @@ def settlement_target_score(
     )
 
 
-def best_route_target_score(state, color, strategy, extra_edge=None):
+def best_route_target_score(
+    state,
+    color,
+    strategy,
+    extra_edge=None,
+    opening_resource_guard=True,
+):
     road_strategy = strategy.get("road", {})
     max_depth = road_strategy.get("route_lookahead_depth", 3)
     step_penalty = road_strategy.get("route_step_penalty", 1.2)
@@ -600,6 +664,7 @@ def best_route_target_score(state, color, strategy, extra_edge=None):
                 extra_edge=extra_edge,
                 distance=distance,
                 spent_roads=1 if extra_edge is not None else 0,
+                opening_resource_guard=opening_resource_guard,
             )
             if target_score >= min_target_score:
                 adjusted_score = target_score - distance * step_penalty
@@ -685,7 +750,7 @@ def port_bonus(state, node_id, resources, strategy):
     return bonus
 
 
-def node_score(state, node_id, strategy, color=None):
+def node_score(state, node_id, strategy, color=None, opening_resource_guard=True):
     adjacent_tiles = state.get("adjacent_tiles", {}).get(str(node_id), [])
     resources = set()
     resource_pips = {}
@@ -734,6 +799,36 @@ def node_score(state, node_id, strategy, color=None):
         for resource in coverage.get("must_cover_for_expansion", []):
             if resource not in combined_resources:
                 score -= coverage.get("missing_expansion_resource_penalty", 0)
+
+        combined_pips = {resource: 0 for resource in RESOURCE_TYPES}
+        if color is not None:
+            combined_pips.update(production_pips_for_color(state, color, strategy))
+        for resource, pips in resource_pips.items():
+            combined_pips[resource] = combined_pips.get(resource, 0) + pips
+
+        if color is not None and building_count > 0 and opening_resource_guard:
+            for resource, penalty in coverage.get(
+                "opening_missing_resource_penalties",
+                {},
+            ).items():
+                if resource not in combined_resources:
+                    score -= penalty
+
+            required_pips = coverage.get("opening_required_resource_pips", {})
+            required_pip_penalty = coverage.get(
+                "opening_required_resource_pip_penalty",
+                coverage.get("opening_weak_resource_pip_penalty", 0),
+            )
+            for resource, min_pips in required_pips.items():
+                score -= max(0, min_pips - combined_pips.get(resource, 0)) * required_pip_penalty
+
+        reliability_targets = coverage.get("opening_reliable_resource_pips", {})
+        if reliability_targets:
+            for resource, min_pips in reliability_targets.items():
+                if resource in combined_resources and combined_pips.get(resource, 0) < min_pips:
+                    score -= (
+                        min_pips - combined_pips.get(resource, 0)
+                    ) * coverage.get("opening_weak_resource_pip_penalty", 0)
 
         if color is not None and building_count > 0:
             concentration = strategy.get("resource_concentration", {})
@@ -858,6 +953,17 @@ def score_road_action(action, state, color, strategy):
         or next_route_score < road_strategy.get("settlement_target_min_score", 0)
     ):
         score -= road_strategy.get("no_settlement_target_penalty", 0)
+
+    if road_action_supports_longest_road_defense(action, state, color, strategy):
+        defense = strategy.get("longest_road_defense", {})
+        score += defense.get("road_score_bonus", 0)
+        if direct_target_score >= road_strategy.get("settlement_target_min_score", 0) or (
+            next_route_score is not None
+            and next_route_score >= road_strategy.get("settlement_target_min_score", 0)
+        ):
+            score += defense.get("settlement_route_bonus", 0)
+        if road_can_flip_longest_road(state, color, roads_to_add=1):
+            score += defense.get("flip_bonus", 0)
 
     return score
 
@@ -1056,8 +1162,16 @@ def catanatron_search_city_override(payload, strategy, recommended_action):
         (index, action)
         for index, action in enumerate(actions)
         if action_type(action) == "BUILD_CITY"
+        and not should_hold_settlement_reserve_for_city(action, state, color, strategy)
     ]
-    if len(city_candidates) < 2:
+    if not city_candidates:
+        return None
+    if len(city_candidates) < 2 and not should_hold_settlement_reserve_for_city(
+        recommended_action,
+        state,
+        color,
+        strategy,
+    ):
         return None
 
     recommended_score = node_score(state, action_value(recommended_action), strategy, color)
@@ -1100,6 +1214,17 @@ def road_action_is_strategy_approved(action, state, color, strategy, hand_pressu
         return False
     score = score_road_action(action, state, color, strategy)
     if should_chase_longest_road(state, color, strategy):
+        if road_action_supports_longest_road_defense(action, state, color, strategy):
+            return score >= strategy.get("longest_road_defense", {}).get(
+                "road_min_score",
+                strategy.get("road", {}).get("longest_road_min_score", -999),
+            )
+        if not (
+            actual_victory_points(state, color)
+            >= strategy.get("road", {}).get("longest_road_chase_min_vp", 8)
+            and road_can_flip_longest_road(state, color)
+        ):
+            return False
         return score >= strategy.get("road", {}).get("longest_road_min_score", -999)
 
     if (
@@ -1116,7 +1241,13 @@ def initial_road_score(action, state, color, strategy):
     if not isinstance(edge, list) or len(edge) != 2:
         return -999
 
-    route_score = best_route_target_score(state, color, strategy, extra_edge=edge)
+    route_score = best_route_target_score(
+        state,
+        color,
+        strategy,
+        extra_edge=edge,
+        opening_resource_guard=False,
+    )
     if route_score is not None:
         return route_score
 
@@ -1129,7 +1260,15 @@ def initial_road_score(action, state, color, strategy):
         if node and node.get("color") is not None:
             endpoint_scores.append(-10)
             continue
-        endpoint_scores.append(node_score(state, node_id, strategy, color))
+        endpoint_scores.append(
+            node_score(
+                state,
+                node_id,
+                strategy,
+                color,
+                opening_resource_guard=False,
+            )
+        )
     return max(endpoint_scores or [-999])
 
 
@@ -1158,19 +1297,168 @@ def road_can_flip_longest_road(state, color, roads_to_add=1):
     return own + roads_to_add >= max(5, opponent_best + 1)
 
 
+def longest_road_defense_threat(state, color, strategy):
+    defense = strategy.get("longest_road_defense", {})
+    if not defense.get("enabled", False):
+        return {"active": False, "opponent": None}
+
+    own_vp = actual_victory_points(state, color)
+
+    opponents = []
+    for opponent in opponent_colors(state, color):
+        is_human = is_human_color(state, opponent)
+        public_vp = player_state_value(state, opponent, "VICTORY_POINTS", 0)
+        road_length = player_state_value(state, opponent, "LONGEST_ROAD_LENGTH", 0)
+        has_road = bool(player_state_value(state, opponent, "HAS_ROAD", False))
+        has_army = bool(player_state_value(state, opponent, "HAS_ARMY", False))
+        effective_vp = public_vp + (2 if has_road else 0) + (2 if has_army else 0)
+        min_own_vp = defense.get(
+            "human_min_own_vp" if is_human else "min_own_vp",
+            defense.get("min_own_vp", 4),
+        )
+        public_trigger = defense.get(
+            "human_opponent_public_vp_trigger" if is_human else "opponent_public_vp_trigger",
+            defense.get("opponent_public_vp_trigger", 6),
+        )
+        effective_trigger = defense.get(
+            "human_opponent_effective_vp_trigger" if is_human else "opponent_effective_vp_trigger",
+            defense.get("opponent_effective_vp_trigger", 8),
+        )
+        road_trigger = defense.get(
+            "human_opponent_road_length_trigger" if is_human else "opponent_road_length_trigger",
+            defense.get("opponent_road_length_trigger", 6),
+        )
+        has_road_public_trigger = defense.get(
+            "human_opponent_has_longest_road_public_vp_trigger"
+            if is_human
+            else "opponent_has_longest_road_public_vp_trigger",
+            defense.get("opponent_has_longest_road_public_vp_trigger", 5),
+        )
+        active = (
+            own_vp >= min_own_vp
+            and road_length >= road_trigger
+            and (
+                public_vp >= public_trigger
+                or effective_vp >= effective_trigger
+                or has_road
+            )
+        )
+        active = active or (
+            own_vp >= min_own_vp
+            and has_road
+            and public_vp >= has_road_public_trigger
+        )
+        opponents.append(
+            {
+                "color": opponent,
+                "public_vp": public_vp,
+                "effective_vp": effective_vp,
+                "road_length": road_length,
+                "has_longest_road": has_road,
+                "active": active,
+                "threat_score": player_threat_score(state, opponent, strategy),
+            }
+        )
+
+    if not opponents:
+        return {"active": False, "opponent": None}
+    strongest = max(
+        opponents,
+        key=lambda opponent: (
+            opponent["active"],
+            opponent["effective_vp"],
+            opponent["road_length"],
+            opponent["threat_score"],
+        ),
+    )
+    own_road_length = player_state_value(state, color, "LONGEST_ROAD_LENGTH", 0)
+    return {
+        "active": strongest["active"],
+        "opponent": strongest,
+        "own_road_length": own_road_length,
+        "gap": strongest["road_length"] - own_road_length,
+    }
+
+
+def can_pressure_longest_road(state, color, strategy, roads_to_add=1):
+    threat = longest_road_defense_threat(state, color, strategy)
+    if not threat.get("active") or not threat.get("opponent"):
+        return False
+
+    own = threat["own_road_length"]
+    opponent_best = threat["opponent"]["road_length"]
+    if own + roads_to_add >= max(5, opponent_best + 1):
+        return True
+    if own < strategy.get("longest_road_defense", {}).get("min_own_road_length", 3):
+        return False
+    gap_after = opponent_best - (own + roads_to_add)
+    return gap_after <= strategy.get("longest_road_defense", {}).get(
+        "max_gap_after_road",
+        2,
+    )
+
+
 def should_chase_longest_road(state, color, strategy, roads_to_add=1):
     threshold = strategy.get("road", {}).get("longest_road_chase_min_vp", 8)
-    return actual_victory_points(state, color) >= threshold and road_can_flip_longest_road(
+    if actual_victory_points(state, color) >= threshold and road_can_flip_longest_road(
         state, color, roads_to_add=roads_to_add
-    )
+    ):
+        return True
+    return can_pressure_longest_road(state, color, strategy, roads_to_add=roads_to_add)
 
 
 def should_play_road_building(state, color, strategy):
     road_strategy = strategy.get("road", {})
-    if not road_strategy.get("road_building_enabled", False):
+    defense = strategy.get("longest_road_defense", {})
+    if not road_strategy.get("road_building_enabled", False) and not defense.get(
+        "road_building_enabled",
+        False,
+    ):
         return False
 
     return should_chase_longest_road(state, color, strategy, roads_to_add=2)
+
+
+def road_action_supports_longest_road_defense(action, state, color, strategy):
+    if action_type(action) != "BUILD_ROAD":
+        return False
+    if not can_pressure_longest_road(state, color, strategy, roads_to_add=1):
+        return False
+
+    defense = strategy.get("longest_road_defense", {})
+    if road_debt_for_state(state, color, strategy) > defense.get("max_road_debt", 4):
+        if not road_can_flip_longest_road(state, color, roads_to_add=1):
+            return False
+
+    edge = action_value(action)
+    if not isinstance(edge, list) or len(edge) != 2:
+        return False
+
+    direct_plan = direct_settlement_target_after_road(action, state, color, strategy)
+    near_plan = road_has_near_settlement_plan(action, state, color, strategy)
+    if direct_plan is not None or near_plan:
+        return settlement_missing_after_road(state, color) <= defense.get(
+            "max_settlement_missing_after_road",
+            2,
+        )
+
+    own_nodes = own_network_nodes(state, color)
+    own_degrees = own_road_degree_by_node(state, color)
+    touches_frontier = any(
+        node_id in own_nodes and own_degrees.get(node_id, 0) <= 1 for node_id in edge
+    )
+    if not touches_frontier:
+        return False
+
+    threat = longest_road_defense_threat(state, color, strategy)
+    opponent = threat.get("opponent") or {}
+    own_after = threat.get("own_road_length", 0) + 1
+    if own_after >= max(5, opponent.get("road_length", 0) + 1):
+        return True
+    return opponent.get("road_length", 0) - own_after <= defense.get(
+        "max_gap_after_road",
+        2,
+    )
 
 
 def choose_discard_action(actions, state, color, strategy):
@@ -1312,11 +1600,50 @@ def city_deficit_score(state, color):
     return city_deficit_from_counts(resource_counts(state, color))
 
 
-def settlement_deficit_from_counts(counts):
-    return sum(
-        max(0, required - counts.get(resource, 0))
-        for resource, required in RESOURCE_COSTS["SETTLEMENT"].items()
+def should_hold_settlement_reserve_for_city(action, state, color, strategy):
+    reserve = strategy.get("settlement_reserve", {})
+    if not reserve.get("enabled", False):
+        return False
+    if action_type(action) != "BUILD_CITY":
+        return False
+
+    pieces = board_piece_counts(state, color)
+    settlements_after_city = max(0, pieces["settlements"] - 1)
+    if settlements_after_city > reserve.get("preserve_when_settlements_at_most", 1):
+        return False
+    vp_after_city = actual_victory_points(state, color) + 1
+    if vp_after_city >= strategy.get("endgame", {}).get(
+        "target_vp",
+        10,
+    ):
+        return False
+    if pieces["cities"] < reserve.get("min_cities_before_reserve", 1):
+        return False
+
+    counts_after_city = counts_after_city_build(state, color)
+    max_missing = reserve.get("max_settlement_missing", 2)
+    min_route_score = reserve.get(
+        "min_route_score",
+        strategy.get("road", {}).get("settlement_target_min_score", 0),
     )
+    if vp_after_city >= reserve.get(
+        "endgame_min_vp",
+        strategy.get("finish", {}).get("min_vp", 8),
+    ):
+        max_missing = reserve.get("endgame_max_settlement_missing", max_missing)
+        min_route_score = reserve.get("endgame_min_route_score", min_route_score)
+
+    if live_settlement_route_exists(
+        state,
+        color,
+        strategy,
+        counts=counts_after_city,
+        max_missing=max_missing,
+        min_route_score=min_route_score,
+    ):
+        return False
+
+    return True
 
 
 def endgame_settlement_mode(state, color, strategy):
@@ -1939,24 +2266,51 @@ def player_threat_score(state, color, strategy):
 
 def leader_shutdown_threat(state, color, strategy):
     shutdown = strategy.get("leader_shutdown", {})
+    human_shutdown = strategy.get("human_leader_shutdown", {})
     if not shutdown.get("enabled", False):
         return {"active": False, "opponent": None}
 
     opponents = []
     for opponent in opponent_colors(state, color):
+        is_human = is_human_color(state, opponent)
         public_vp = player_state_value(state, opponent, "VICTORY_POINTS", 0)
         played_knights = player_state_value(state, opponent, "PLAYED_KNIGHT", 0)
         road_length = player_state_value(state, opponent, "LONGEST_ROAD_LENGTH", 0)
         has_army = bool(player_state_value(state, opponent, "HAS_ARMY", False))
         has_road = bool(player_state_value(state, opponent, "HAS_ROAD", False))
         immediate_public_vp = public_vp + (2 if has_army else 0) + (2 if has_road else 0)
-        active = public_vp >= shutdown.get("public_vp_trigger", 8)
-        active = active or immediate_public_vp >= shutdown.get("effective_vp_trigger", 9)
+        public_trigger = (
+            human_shutdown.get("public_vp_trigger", shutdown.get("public_vp_trigger", 8))
+            if is_human
+            else shutdown.get("public_vp_trigger", 8)
+        )
+        effective_trigger = (
+            human_shutdown.get("effective_vp_trigger", shutdown.get("effective_vp_trigger", 9))
+            if is_human
+            else shutdown.get("effective_vp_trigger", 9)
+        )
+        near_public_trigger = (
+            human_shutdown.get("near_public_vp_trigger", shutdown.get("near_public_vp_trigger", 7))
+            if is_human
+            else shutdown.get("near_public_vp_trigger", 7)
+        )
+        played_knights_trigger = (
+            human_shutdown.get("played_knights_trigger", shutdown.get("played_knights_trigger", 2))
+            if is_human
+            else shutdown.get("played_knights_trigger", 2)
+        )
+        road_length_trigger = (
+            human_shutdown.get("road_length_trigger", shutdown.get("road_length_trigger", 7))
+            if is_human
+            else shutdown.get("road_length_trigger", 7)
+        )
+        active = public_vp >= public_trigger
+        active = active or immediate_public_vp >= effective_trigger
         active = active or (
-            public_vp >= shutdown.get("near_public_vp_trigger", 7)
+            public_vp >= near_public_trigger
             and (
-                played_knights >= shutdown.get("played_knights_trigger", 2)
-                or road_length >= shutdown.get("road_length_trigger", 7)
+                played_knights >= played_knights_trigger
+                or road_length >= road_length_trigger
                 or has_army
                 or has_road
             )
@@ -2142,6 +2496,14 @@ def endgame_road_action_is_strictly_approved(action, state, color, strategy):
     ):
         return True
     if should_chase_longest_road(state, color, strategy):
+        if road_action_supports_longest_road_defense(action, state, color, strategy):
+            return True
+        return (
+            actual_victory_points(state, color)
+            >= strategy.get("road", {}).get("longest_road_chase_min_vp", 8)
+            and road_can_flip_longest_road(state, color)
+        )
+    if road_action_supports_longest_road_defense(action, state, color, strategy):
         return True
     if not road_has_endgame_settlement_plan(action, state, color, strategy):
         return False
@@ -2178,10 +2540,15 @@ def catanatron_search_finish_override(payload, strategy, recommended_action):
         grouped.setdefault(action_type(action), []).append((index, action))
 
     if own_endgame and "BUILD_CITY" in grouped:
-        candidates = [item[1] for item in grouped["BUILD_CITY"]]
-        selected = choose_best_city_action(candidates, state, strategy, color)
-        selected_id, selected_index = action_id(selected, actions.index(selected))
-        return selected_id, selected_index, "catanatron search finish override: take immediate city VP"
+        candidates = [
+            item[1]
+            for item in grouped["BUILD_CITY"]
+            if not should_hold_settlement_reserve_for_city(item[1], state, color, strategy)
+        ]
+        if candidates:
+            selected = choose_best_city_action(candidates, state, strategy, color)
+            selected_id, selected_index = action_id(selected, actions.index(selected))
+            return selected_id, selected_index, "catanatron search finish override: take immediate city VP"
 
     if own_endgame and "BUILD_SETTLEMENT" in grouped:
         candidates = [item[1] for item in grouped["BUILD_SETTLEMENT"]]
@@ -2215,6 +2582,7 @@ def catanatron_search_finish_override(payload, strategy, recommended_action):
     if (
         "BUY_DEVELOPMENT_CARD" in grouped
         and recommended_type in override_types
+        and not visible_finish_road_available(actions, state, color, strategy)
         and not (
             recommended_type == "BUILD_ROAD"
             and endgame_road_action_is_strictly_approved(
@@ -2233,6 +2601,77 @@ def catanatron_search_finish_override(payload, strategy, recommended_action):
         return selected_id, selected_index, "catanatron search finish override: buy dev for late-game outs"
 
     return None
+
+
+def catanatron_search_longest_road_defense_override(payload, strategy, recommended_action):
+    search_strategy = strategy.get("catanatron_search", {})
+    defense = strategy.get("longest_road_defense", {})
+    if not defense.get("enabled", False):
+        return None
+    if payload.get("current_prompt") != "PLAY_TURN":
+        return None
+
+    state = payload.get("state", {})
+    color = payload.get("color")
+    if not longest_road_defense_threat(state, color, strategy).get("active", False):
+        return None
+
+    actions = payload.get("legal_actions") or payload.get("playable_actions", [])
+    action_types = {action_type(action) for action in actions}
+    if action_types.intersection({"BUILD_CITY", "BUILD_SETTLEMENT"}):
+        return None
+
+    for index, action in enumerate(actions):
+        if action_type(action) == "PLAY_ROAD_BUILDING" and should_play_road_building(
+            state,
+            color,
+            strategy,
+        ):
+            selected_id, selected_index = action_id(action, index)
+            return (
+                selected_id,
+                selected_index,
+                "catanatron search road defense override: play road building to contest longest road",
+            )
+
+    road_candidates = [
+        action
+        for action in actions
+        if action_type(action) == "BUILD_ROAD"
+        and road_action_supports_longest_road_defense(action, state, color, strategy)
+    ]
+    if not road_candidates:
+        return None
+
+    recommended_type = action_type(recommended_action)
+    passive_types = set(
+        defense.get(
+            "override_action_types",
+            ["END_TURN", "MARITIME_TRADE", "BUY_DEVELOPMENT_CARD", "PLAY_KNIGHT_CARD"],
+        )
+    )
+    if recommended_type == "BUILD_ROAD" and road_action_supports_longest_road_defense(
+        recommended_action,
+        state,
+        color,
+        strategy,
+    ):
+        return None
+    if recommended_type not in passive_types and recommended_type != "BUILD_ROAD":
+        return None
+
+    selected = choose_best_road_action(road_candidates, state, color, strategy)
+    if score_road_action(selected, state, color, strategy) < defense.get(
+        "road_min_score",
+        -2,
+    ):
+        return None
+    selected_id, selected_index = action_id(selected, actions.index(selected))
+    return (
+        selected_id,
+        selected_index,
+        "catanatron search road defense override: contest opponent longest road",
+    )
 
 
 def catanatron_search_army_defense_override(payload, strategy, recommended_action):
@@ -2270,6 +2709,18 @@ def catanatron_search_army_defense_override(payload, strategy, recommended_actio
     )
     if recommended_type == "BUILD_ROAD":
         road_score = score_road_action(recommended_action, state, color, strategy)
+        if (
+            actual_victory_points(state, color)
+            >= strategy.get("finish", {}).get("visible_route_before_dev_min_vp", 9)
+            and road_has_endgame_settlement_plan(recommended_action, state, color, strategy)
+            and endgame_road_action_is_strictly_approved(
+                recommended_action,
+                state,
+                color,
+                strategy,
+            )
+        ):
+            return None
         if road_score <= search_strategy.get("army_defense_road_override_max_score", 1):
             passive_types.add("BUILD_ROAD")
 
@@ -2493,10 +2944,15 @@ def _choose_action_core(payload, strategy):
     endgame = is_endgame(state, color, strategy)
 
     if "BUILD_CITY" in grouped:
-        candidates = [item[1] for item in grouped["BUILD_CITY"]]
-        selected = choose_best_city_action(candidates, state, strategy, color)
-        selected_id, selected_index = action_id(selected, actions.index(selected))
-        return selected_id, selected_index, "city before road: convert resources into VP and stronger production"
+        candidates = [
+            item[1]
+            for item in grouped["BUILD_CITY"]
+            if not should_hold_settlement_reserve_for_city(item[1], state, color, strategy)
+        ]
+        if candidates:
+            selected = choose_best_city_action(candidates, state, strategy, color)
+            selected_id, selected_index = action_id(selected, actions.index(selected))
+            return selected_id, selected_index, "city before road: convert resources into VP and stronger production"
 
     if "BUILD_SETTLEMENT" in grouped:
         candidates = [item[1] for item in grouped["BUILD_SETTLEMENT"]]
@@ -2592,7 +3048,13 @@ def _choose_action_core(payload, strategy):
         if candidates:
             selected = choose_best_road_action(candidates, state, color, strategy)
             selected_id, selected_index = action_id(selected, actions.index(selected))
+            if road_action_supports_longest_road_defense(selected, state, color, strategy):
+                return selected_id, selected_index, "road defense: contest opponent longest road while preserving expansion"
             return selected_id, selected_index, "road only when it directly enables a near-term settlement or endgame longest road"
+        if set(grouped.keys()) == {"BUILD_ROAD"}:
+            selected = choose_best_road_action([item[1] for item in grouped["BUILD_ROAD"]], state, color, strategy)
+            selected_id, selected_index = action_id(selected, actions.index(selected))
+            return selected_id, selected_index, "forced free-road selection: choose least-bad road"
 
     if "PLAY_MONOPOLY" in grouped:
         candidates = [item[1] for item in grouped["PLAY_MONOPOLY"]]
@@ -2781,6 +3243,24 @@ def same_action(left, right):
     return action_type(left) == action_type(right) and action_value(left) == action_value(right)
 
 
+def visible_finish_road_available(actions, state, color, strategy):
+    finish = strategy.get("finish", {})
+    if actual_victory_points(state, color) < finish.get("visible_route_before_dev_min_vp", 9):
+        return False
+    if not endgame_settlement_mode(state, color, strategy):
+        return False
+
+    road_strategy = strategy.get("road", {})
+    min_score = road_strategy.get("endgame_settlement_road_min_score", 0)
+    return any(
+        action_type(action) == "BUILD_ROAD"
+        and road_has_endgame_settlement_plan(action, state, color, strategy)
+        and endgame_road_action_is_strictly_approved(action, state, color, strategy)
+        and score_road_action(action, state, color, strategy) >= min_score
+        for action in actions
+    )
+
+
 def search_action_passes_guardrails(payload, strategy, action):
     search_strategy = strategy.get("catanatron_search", {})
     if not search_strategy.get("respect_guardrails", True):
@@ -2800,11 +3280,25 @@ def search_action_passes_guardrails(payload, strategy, action):
     if type_name in blocked_types:
         return False
 
+    if type_name == "BUILD_CITY":
+        return not should_hold_settlement_reserve_for_city(action, state, color, strategy)
+
     if type_name == "BUILD_ROAD":
         score = score_road_action(action, state, color, strategy)
         if not endgame_road_action_is_strictly_approved(action, state, color, strategy):
             return False
         if should_chase_longest_road(state, color, strategy):
+            if road_action_supports_longest_road_defense(action, state, color, strategy):
+                return score >= strategy.get("longest_road_defense", {}).get(
+                    "road_min_score",
+                    search_strategy.get("longest_road_min_score", -12),
+                )
+            if not (
+                actual_victory_points(state, color)
+                >= strategy.get("road", {}).get("longest_road_chase_min_vp", 8)
+                and road_can_flip_longest_road(state, color)
+            ):
+                return False
             return score >= search_strategy.get("longest_road_min_score", -12)
         has_near_settlement_plan = road_has_near_settlement_plan(
             action,
@@ -2857,6 +3351,14 @@ def search_action_passes_guardrails(payload, strategy, action):
 
     if type_name == "PLAY_ROAD_BUILDING":
         return should_play_road_building(state, color, strategy)
+
+    if type_name == "BUY_DEVELOPMENT_CARD" and visible_finish_road_available(
+        payload.get("legal_actions") or payload.get("playable_actions", []),
+        state,
+        color,
+        strategy,
+    ):
+        return False
 
     return True
 
@@ -2918,6 +3420,14 @@ def apply_catanatron_search_primary(
     if city_override is not None:
         return city_override
 
+    road_defense_override = catanatron_search_longest_road_defense_override(
+        payload,
+        strategy,
+        recommended_action,
+    )
+    if road_defense_override is not None:
+        return road_defense_override
+
     army_defense_override = catanatron_search_army_defense_override(
         payload,
         strategy,
@@ -2971,6 +3481,8 @@ def teacher_action_passes_strategy_gate(payload, strategy, action):
             strategy,
             hand_pressure=hand_pressure,
         )
+    if type_name == "BUILD_CITY":
+        return not should_hold_settlement_reserve_for_city(action, state, color, strategy)
     if type_name == "MARITIME_TRADE":
         actions = payload.get("legal_actions") or payload.get("playable_actions", [])
         candidates = [
@@ -2988,6 +3500,9 @@ def teacher_action_passes_strategy_gate(payload, strategy, action):
         )
         return selected is not None and same_action(selected, action)
     if type_name == "BUY_DEVELOPMENT_CARD":
+        actions = payload.get("legal_actions") or payload.get("playable_actions", [])
+        if visible_finish_road_available(actions, state, color, strategy):
+            return False
         return (
             should_buy_development_card(state, color, strategy, ignore_caps=endgame)
             or should_buy_development_card_to_reduce_hand(state, color, strategy)

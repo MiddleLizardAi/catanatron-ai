@@ -1,6 +1,6 @@
 {
-  "name": "search_first_catan_v13_finish_threat",
-  "description": "Search-first base-Catan strategy: use Catanatron AlphaBeta depth-2 as the primary move source, with Codex guardrails for expansion quality plus a finish/threat layer for 8+ VP, late-game development cards, leader shutdown, stricter endgame roads, and safe robber moves.",
+  "name": "search_first_catan_v15_human_finish_guard",
+  "description": "Search-first base-Catan strategy: use Catanatron AlphaBeta depth-2 as the primary move source, with Codex guardrails for expansion quality, finish/threat play, human-leader defense, Longest Road defense, stricter settlement reserve before final city upgrades, and safe robber moves.",
   "production_weights": {
     "2": 1,
     "3": 2,
@@ -74,7 +74,23 @@
     "missing_expansion_resource_penalty": 2.4,
     "missing_current_resource_bonus": 4.2,
     "ore_wheat_pair_bonus": 0.9,
-    "ore_without_wheat_penalty": 1.1
+    "ore_without_wheat_penalty": 1.1,
+    "opening_reliable_resource_pips": {
+      "WOOD": 3,
+      "BRICK": 3,
+      "WHEAT": 3,
+      "ORE": 2
+    },
+    "opening_weak_resource_pip_penalty": 0.65,
+    "opening_missing_resource_penalties": {
+      "WOOD": 5.5,
+      "BRICK": 3.2
+    },
+    "opening_required_resource_pips": {
+      "WOOD": 2,
+      "BRICK": 2
+    },
+    "opening_required_resource_pip_penalty": 1.4
   },
   "resource_concentration": {
     "opening_duplicate_pip_penalty": 0.2,
@@ -131,6 +147,39 @@
     "opponent_tie_penalty": 7,
     "opponent_nearby_penalty": 4
   },
+  "longest_road_defense": {
+    "enabled": true,
+    "min_own_vp": 7,
+    "min_own_road_length": 4,
+    "opponent_public_vp_trigger": 7,
+    "opponent_effective_vp_trigger": 9,
+    "opponent_has_longest_road_public_vp_trigger": 7,
+    "opponent_road_length_trigger": 7,
+    "human_min_own_vp": 6,
+    "human_opponent_public_vp_trigger": 7,
+    "human_opponent_effective_vp_trigger": 8,
+    "human_opponent_has_longest_road_public_vp_trigger": 6,
+    "human_opponent_road_length_trigger": 6,
+    "max_gap_after_road": 1,
+    "max_settlement_missing_after_road": 2,
+    "max_road_debt": 2,
+    "road_min_score": 0.5,
+    "road_score_bonus": 2.4,
+    "settlement_route_bonus": 1.4,
+    "flip_bonus": 2.5,
+    "road_building_enabled": true,
+    "override_action_types": ["END_TURN", "MARITIME_TRADE", "BUY_DEVELOPMENT_CARD", "PLAY_KNIGHT_CARD"]
+  },
+  "settlement_reserve": {
+    "enabled": true,
+    "preserve_when_settlements_at_most": 1,
+    "min_cities_before_reserve": 1,
+    "max_settlement_missing": 2,
+    "min_route_score": 1.8,
+    "endgame_min_vp": 8,
+    "endgame_max_settlement_missing": 1,
+    "endgame_min_route_score": 2.4
+  },
   "development": {
     "max_cards_per_game": 5,
     "max_unplayed_tactical_cards": 1,
@@ -160,6 +209,13 @@
     "played_knights_trigger": 2,
     "road_length_trigger": 7
   },
+  "human_leader_shutdown": {
+    "public_vp_trigger": 7,
+    "effective_vp_trigger": 8,
+    "near_public_vp_trigger": 6,
+    "played_knights_trigger": 1,
+    "road_length_trigger": 6
+  },
   "army_defense": {
     "enabled": true,
     "opponent_knights_trigger": 2,
@@ -179,6 +235,7 @@
     "play_knight_when_own_knights_at_least": 2,
     "dev_override_action_types": ["END_TURN", "MARITIME_TRADE"],
     "dev_keeps_strict_road_if_settlement_missing_at_most": 0,
+    "visible_route_before_dev_min_vp": 9,
     "strict_endgame_road_gate": true,
     "strict_road_min_vp": 9,
     "max_settlement_missing_after_endgame_road": 2
@@ -320,7 +377,7 @@
     "After three total buildings, transition toward cities. Do not keep building road chains while sitting on zero or one city unless the expansion settlement is one resource away.",
     "Two-hex coastal settlement spots can be correct, especially with a useful port, missing resource, or strong number pair. Do not require every expansion target to touch three land hexes.",
     "A road endpoint is not enough by itself: prefer roads that improve the shortest path to a legal settlement candidate under distance-2 rules. Roads around existing cities/settlements are fake progress unless they unlock a concrete expansion route.",
-    "Road Building is temporarily disabled until we add route planning. Without route simulation it tends to force two roads that look active but produce no VP.",
+    "Road Building is enabled only when it supports Longest Road defense or an immediate road-race plan; normal random route dumping is still blocked.",
     "Before ending a turn with more than seven cards, prefer any useful build, targeted trade, or development card to reduce discard exposure.",
     "Endgame rule: at 8+ actual VP, stop optimizing general production. Prefer the shortest route to 10 VP: direct city/settlement, then Longest Road if one road can flip it, then development cards/trades for hidden VP.",
     "At 8+ VP, if all settlements have already become cities, rebuild a live settlement route instead of passing with only city/development-card plans.",
@@ -333,6 +390,13 @@
     "Use development cards more actively when a leader is close to Largest Army; buying and playing knights is part of defense, not only a fallback.",
     "The current live target is a less road-heavy style even if raw self-play win-rate is slightly below the road-heavy v10 profile.",
     "At 8+ VP, switch from general expansion to finish mode: take immediate city/settlement VP and trade only into direct VP plans. Keep normal expansion roads alive at 8 VP, then tighten roads and development-card outs at 9+ VP.",
-    "When an opponent has 8+ public VP or a visible road/army swing, treat defense as urgent. Prefer knight/dev-card control over non-final roads or generic trades."
+    "When an opponent has 8+ public VP or a visible road/army swing, treat defense as urgent. Prefer knight/dev-card control over non-final roads or generic trades.",
+    "v14 adds Longest Road defense earlier than the pure finish race: when an opponent has a credible road lead, allow road contest/denial if the gap stays close and the road is not dead.",
+    "v14 preserves the last live settlement before a city upgrade unless the city wins immediately or Codex still has a reachable settlement route with enough resources to rebuild expansion.",
+    "v14 opening evaluation treats weak single-number resource coverage as unreliable, especially for wood/brick expansion resources and ore/wheat city resources.",
+    "v15 makes the second opening settlement pay a large penalty for still missing wood or brick, because high-pip ore/wheat starts without expansion tempo collapsed in live human games.",
+    "v15 city reserve evaluates the board after the city build. At 8+ VP, a city that leaves Codex with zero or one live settlement is blocked unless a concrete settlement route remains close after spending the city resources.",
+    "v15 treats a human leader as urgent earlier than a Catanatron leader: 7 public VP, 8 effective VP, a visible road race, or one played knight can activate shutdown/defense logic.",
+    "v15 protects visible 9-VP settlement routes from being overridden by generic development-card or army-defense buys."
   ]
 }
