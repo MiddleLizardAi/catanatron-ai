@@ -3,6 +3,9 @@ from unittest.mock import MagicMock, patch
 
 from catanatron.state_functions import (
     get_actual_victory_points,
+    build_road as record_built_road,
+    build_settlement as record_built_settlement,
+    maintain_longest_road,
     get_player_freqdeck,
     player_clean_turn,
     player_has_rolled,
@@ -105,6 +108,62 @@ def test_can_play_for_a_bit():  # assert no exception thrown
     game = Game(players)
     for _ in range(10):
         game.play_tick()
+
+
+def test_plowed_short_roads_do_not_award_longest_road():
+    players = [
+        SimplePlayer(Color.RED),
+        SimplePlayer(Color.ORANGE),
+        SimplePlayer(Color.BLUE),
+    ]
+    game = Game(players)
+    state = game.state
+
+    def place_initial_settlement(color, node_id):
+        state.board.build_settlement(color, node_id, initial_build_phase=True)
+        record_built_settlement(state, color, node_id, True)
+
+    def place_road(color, edge):
+        previous_road_color, road_color, road_lengths = state.board.build_road(
+            color, edge
+        )
+        record_built_road(state, color, edge, True)
+        maintain_longest_road(state, previous_road_color, road_color, road_lengths)
+
+    place_initial_settlement(Color.RED, 22)
+    place_initial_settlement(Color.ORANGE, 0)
+    place_initial_settlement(Color.BLUE, 4)
+
+    place_road(Color.RED, (22, 23))
+    place_road(Color.RED, (6, 23))
+    place_road(Color.ORANGE, (0, 1))
+    place_road(Color.ORANGE, (1, 6))
+    place_road(Color.ORANGE, (6, 7))
+    place_road(Color.ORANGE, (7, 24))
+    place_road(Color.ORANGE, (24, 25))
+
+    red_key = player_key(state, Color.RED)
+    orange_key = player_key(state, Color.ORANGE)
+    assert state.player_state[f"{orange_key}_HAS_ROAD"] is True
+    assert state.player_state[f"{orange_key}_LONGEST_ROAD_LENGTH"] == 5
+    assert state.player_state[f"{red_key}_LONGEST_ROAD_LENGTH"] == 2
+
+    red_vps_before = state.player_state[f"{red_key}_ACTUAL_VICTORY_POINTS"]
+    orange_vps_before = state.player_state[f"{orange_key}_ACTUAL_VICTORY_POINTS"]
+    previous_road_color, road_color, road_lengths = state.board.build_settlement(
+        Color.RED, 6, initial_build_phase=False
+    )
+    record_built_settlement(state, Color.RED, 6, True)
+    maintain_longest_road(state, previous_road_color, road_color, road_lengths)
+
+    assert state.player_state[f"{red_key}_LONGEST_ROAD_LENGTH"] == 2
+    assert state.player_state[f"{orange_key}_LONGEST_ROAD_LENGTH"] < 5
+    assert state.player_state[f"{red_key}_HAS_ROAD"] is False
+    assert state.player_state[f"{orange_key}_HAS_ROAD"] is False
+    assert state.player_state[f"{red_key}_ACTUAL_VICTORY_POINTS"] == red_vps_before + 1
+    assert state.player_state[f"{orange_key}_ACTUAL_VICTORY_POINTS"] == (
+        orange_vps_before - 2
+    )
 
 
 @patch("catanatron.apply_action.roll_dice")
@@ -235,9 +294,7 @@ def test_friendly_robber_filters_tiles_in_game_playable_actions(fake_roll_dice):
     regular_game = Game(players, seed=1, friendly_robber=False)
     build_initial_placements(regular_game)
     regular_game.execute(Action(Color.RED, ActionType.ROLL, None))
-    regular_coordinates = {
-        action.value[0] for action in regular_game.playable_actions
-    }
+    regular_coordinates = {action.value[0] for action in regular_game.playable_actions}
 
     friendly_game = Game(players, seed=1, friendly_robber=True)
     build_initial_placements(friendly_game)

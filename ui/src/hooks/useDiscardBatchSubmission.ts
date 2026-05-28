@@ -12,6 +12,7 @@ type SubmitDiscardBatchParams = {
   gameId: string;
   humanColor: GameAction[0];
   resources: ResourceCard[];
+  stateIndex: number;
 };
 
 export function useDiscardBatchSubmission() {
@@ -23,13 +24,16 @@ export function useDiscardBatchSubmission() {
       gameId,
       humanColor,
       resources,
+      stateIndex,
     }: SubmitDiscardBatchParams): Promise<GameState> => {
       setIsSubmitting(true);
       try {
         let nextGameState: GameState | null = null;
+        let expectedStateIndex = stateIndex;
         for (const resource of resources) {
           const action: GameAction = [humanColor, discardActionType, resource];
-          nextGameState = await postAction(gameId, action);
+          nextGameState = await postAction(gameId, action, expectedStateIndex);
+          expectedStateIndex = nextGameState.state_index;
         }
 
         if (nextGameState === null) {

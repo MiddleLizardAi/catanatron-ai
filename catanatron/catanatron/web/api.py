@@ -9,6 +9,7 @@ from catanatron.json import GameEncoder, action_from_json
 from catanatron.models.player import Color, RandomPlayer, WebHookPlayer
 from catanatron.game import Game
 from catanatron.models.map import build_map
+from catanatron.state_functions import get_state_index
 from catanatron.players.value import ValueFunctionPlayer
 from catanatron.players.minimax import AlphaBetaPlayer
 from catanatron.players.weighted_random import WeightedRandomPlayer
@@ -29,13 +30,19 @@ def _with_metadata(player, player_type, name=None, webhook_url=None):
 def player_factory(player_key):
     player_type, color = player_key
     if player_type == "CATANATRON":
-        return _with_metadata(AlphaBetaPlayer(color, 2, True), player_type, "Catanatron")
+        return _with_metadata(
+            AlphaBetaPlayer(color, 2, True), player_type, "Catanatron"
+        )
     elif player_type == "WEIGHTED_RANDOM":
-        return _with_metadata(WeightedRandomPlayer(color), player_type, "Weighted Random")
+        return _with_metadata(
+            WeightedRandomPlayer(color), player_type, "Weighted Random"
+        )
     elif player_type == "RANDOM":
         return _with_metadata(RandomPlayer(color), player_type, "Random")
     elif player_type == "HUMAN":
-        return _with_metadata(ValueFunctionPlayer(color, is_bot=False), player_type, "Human")
+        return _with_metadata(
+            ValueFunctionPlayer(color, is_bot=False), player_type, "Human"
+        )
     else:
         raise ValueError("Invalid player key")
 
@@ -57,7 +64,9 @@ def player_factory_from_dict(player_dict):
     if player_type == "RANDOM":
         return _with_metadata(RandomPlayer(color), player_type, name)
     if player_type == "HUMAN":
-        return _with_metadata(ValueFunctionPlayer(color, is_bot=False), player_type, name)
+        return _with_metadata(
+            ValueFunctionPlayer(color, is_bot=False), player_type, name
+        )
     raise ValueError(f"Invalid player type: {player_type}")
 
 
@@ -137,12 +146,36 @@ def post_action_endpoint(game_id):
             mimetype="application/json",
         )
 
-    body_is_empty = (not request.data) or request.json is None or request.json == {}
+    request_payload = request.get_json(silent=True)
+    body_is_empty = (
+        (not request.data) or request_payload is None or request_payload == {}
+    )
     if game.state.current_player().is_bot:
         game.play_tick()
         upsert_game_state(game)
     elif not body_is_empty:
-        action = action_from_json(request.json)
+        action_payload = request_payload
+        expected_state_index = None
+        if isinstance(request_payload, dict) and "action" in request_payload:
+            action_payload = request_payload["action"]
+            expected_state_index = request_payload.get("state_index")
+
+        if (
+            expected_state_index is not None
+            and expected_state_index != get_state_index(game.state)
+        ):
+            return Response(
+                response=json.dumps(
+                    {
+                        "error": "stale_action",
+                        "expected_state_index": get_state_index(game.state),
+                    }
+                ),
+                status=409,
+                mimetype="application/json",
+            )
+
+        action = action_from_json(action_payload)
         game.execute(action)
         upsert_game_state(game)
 

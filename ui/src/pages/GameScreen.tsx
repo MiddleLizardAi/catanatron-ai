@@ -92,9 +92,15 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
           window.setTimeout(() => {
             // simulate thinking
             setIsBotThinking(false);
-            dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-            if (getHumanColor(gameState)) {
-              dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+            const currentStateIndex = latestStateIndexRef.current;
+            if (
+              currentStateIndex === null ||
+              gameState.state_index >= currentStateIndex
+            ) {
+              dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+              if (getHumanColor(gameState)) {
+                dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+              }
             }
           }, Math.max(0, ROBOT_THINKING_TIME - requestTime));
         } catch (error) {

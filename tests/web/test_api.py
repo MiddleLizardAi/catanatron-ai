@@ -97,8 +97,18 @@ def test_post_game_endpoint_accepts_player_objects(client):
     assert players_by_color == {
         "RED": {"color": "RED", "name": "Dmytro", "type": "HUMAN", "is_bot": False},
         "BLUE": {"color": "BLUE", "name": "Friend", "type": "HUMAN", "is_bot": False},
-        "ORANGE": {"color": "ORANGE", "name": "Bot One", "type": "RANDOM", "is_bot": True},
-        "WHITE": {"color": "WHITE", "name": "Bot Two", "type": "CATANATRON", "is_bot": True},
+        "ORANGE": {
+            "color": "ORANGE",
+            "name": "Bot One",
+            "type": "RANDOM",
+            "is_bot": True,
+        },
+        "WHITE": {
+            "color": "WHITE",
+            "name": "Bot Two",
+            "type": "CATANATRON",
+            "is_bot": True,
+        },
     }
 
 
@@ -107,7 +117,12 @@ def test_post_game_endpoint_accepts_webhook_player(client):
         "/api/games",
         json={
             "players": [
-                {"type": "WEBHOOK", "name": "Codex", "color": "RED", "webhook": "http://example.test/decide"},
+                {
+                    "type": "WEBHOOK",
+                    "name": "Codex",
+                    "color": "RED",
+                    "webhook": "http://example.test/decide",
+                },
                 {"type": "RANDOM", "name": "Bot", "color": "BLUE"},
             ]
         },
@@ -177,8 +192,7 @@ def test_get_game_not_found(client):
 
 def test_post_action_bot_turn(client):
     """Test posting an action when it's a bot's turn."""
-    # Create a game with at least one bot (RANDOM is a bot)
-    post_response = client.post("/api/games", json={"players": ["RANDOM", "HUMAN"]})
+    post_response = client.post("/api/games", json={"players": ["RANDOM", "RANDOM"]})
     assert post_response.status_code == 200
     game_id = json.loads(post_response.data)["game_id"]
 
@@ -193,17 +207,74 @@ def test_post_action_bot_turn(client):
     assert len(data_after["action_records"]) > len(data_before["action_records"])
 
 
+def test_post_action_accepts_state_index_guard(client):
+    post_response = client.post(
+        "/api/games",
+        json={
+            "players": [
+                {"type": "HUMAN", "name": "Dmytro", "color": "RED"},
+                {"type": "HUMAN", "name": "Friend", "color": "BLUE"},
+            ]
+        },
+    )
+    game_id = json.loads(post_response.data)["game_id"]
+    latest = json.loads(client.get(f"/api/games/{game_id}/states/latest").data)
+
+    response = client.post(
+        f"/api/games/{game_id}/actions",
+        json={
+            "action": latest["current_playable_actions"][0],
+            "state_index": latest["state_index"],
+        },
+    )
+    data = json.loads(response.data)
+
+    assert response.status_code == 200
+    assert data["state_index"] == latest["state_index"] + 1
+
+
+def test_post_action_rejects_stale_state_index(client):
+    post_response = client.post(
+        "/api/games",
+        json={
+            "players": [
+                {"type": "HUMAN", "name": "Dmytro", "color": "RED"},
+                {"type": "HUMAN", "name": "Friend", "color": "BLUE"},
+            ]
+        },
+    )
+    game_id = json.loads(post_response.data)["game_id"]
+    latest = json.loads(client.get(f"/api/games/{game_id}/states/latest").data)
+
+    response = client.post(
+        f"/api/games/{game_id}/actions",
+        json={
+            "action": latest["current_playable_actions"][0],
+            "state_index": latest["state_index"] - 1,
+        },
+    )
+    latest_after = json.loads(client.get(f"/api/games/{game_id}/states/latest").data)
+    data = json.loads(response.data)
+
+    assert response.status_code == 409
+    assert data["error"] == "stale_action"
+    assert latest_after["state_index"] == latest["state_index"]
+
+
 def test_empty_post_does_not_advance_human_turn(client):
     post_response = client.post(
         "/api/games",
-        json={"players": [{"type": "HUMAN", "name": "Dmytro", "color": "RED"}]},
+        json={
+            "players": [
+                {"type": "HUMAN", "name": "Dmytro", "color": "RED"},
+                {"type": "HUMAN", "name": "Friend", "color": "BLUE"},
+            ]
+        },
     )
     assert post_response.status_code == 200
     game_id = json.loads(post_response.data)["game_id"]
 
-    data_before = json.loads(
-        client.get(f"/api/games/{game_id}/states/latest").data
-    )
+    data_before = json.loads(client.get(f"/api/games/{game_id}/states/latest").data)
     response = client.post(f"/api/games/{game_id}/actions", json={})
     assert response.status_code == 200
     data_after = json.loads(response.data)

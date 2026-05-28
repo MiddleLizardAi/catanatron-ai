@@ -55,10 +55,18 @@ export async function getState(
 }
 
 /** action=undefined means bot action */
-export async function postAction(gameId: string, action?: GameAction) {
+export async function postAction(
+  gameId: string,
+  action?: GameAction,
+  expectedStateIndex?: number,
+) {
+  const payload =
+    action && expectedStateIndex !== undefined
+      ? { action, state_index: expectedStateIndex }
+      : action;
   const response = await axios.post<GameState>(
     `${API_URL}/api/games/${gameId}/actions`,
-    action
+    payload
   );
   return response.data;
 }

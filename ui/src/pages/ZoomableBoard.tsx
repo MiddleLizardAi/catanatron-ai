@@ -107,8 +107,12 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
       console.log("Clicked Node ", id, action);
       if (action) {
         try {
-          const gameState = await postAction(gameId, action);
-          dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+          const nextGameState = await postAction(
+            gameId,
+            action,
+            gameState.state_index,
+          );
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
         } catch (error) {
           console.error("Failed to submit node action; refreshing latest state", error);
           const latestState = await getState(gameId, "latest");
@@ -116,15 +120,19 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
         }
       }
     }),
-    [gameId, dispatch]
+    [gameId, dispatch, gameState.state_index]
   );
   const buildOnEdgeClick = useCallback(
     memoize((id, action) => async () => {
       console.log("Clicked Edge ", id, action);
       if (action) {
         try {
-          const gameState = await postAction(gameId, action);
-          dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+          const nextGameState = await postAction(
+            gameId,
+            action,
+            gameState.state_index,
+          );
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
         } catch (error) {
           console.error("Failed to submit edge action; refreshing latest state", error);
           const latestState = await getState(gameId, "latest");
@@ -132,7 +140,7 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
         }
       }
     }),
-    [gameId, dispatch]
+    [gameId, dispatch, gameState.state_index]
   );
   const isMoveRobberPrompt =
     !replayMode &&
@@ -153,8 +161,12 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
         );
         if (matchingAction) {
           try {
-            const gameState = await postAction(gameId, matchingAction);
-            dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+            const nextGameState = await postAction(
+              gameId,
+              matchingAction,
+              gameState.state_index,
+            );
+            dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
           } catch (error) {
             console.error("Failed to submit robber action; refreshing latest state", error);
             const latestState = await getState(gameId, "latest");
@@ -166,7 +178,13 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
         }
       }
     }),
-    [isMoveRobberPrompt, gameState.current_playable_actions, gameId, dispatch]
+    [
+      isMoveRobberPrompt,
+      gameState.current_playable_actions,
+      gameState.state_index,
+      gameId,
+      dispatch,
+    ]
   );
 
   const nodeActions = replayMode ? {} : buildNodeActions(state, window.location.search);

@@ -140,9 +140,7 @@ class Board:
                             for component in self.connected_components[edge_color]
                         ]
                     )
-                    self.road_color, self.road_length = max(
-                        self.road_lengths.items(), key=lambda e: e[1]
-                    )
+                    self._recompute_longest_road_owner(previous_road_color)
 
         self.board_buildable_ids.discard(node_id)
         for n in STATIC_GRAPH.neighbors(node_id):
@@ -151,6 +149,24 @@ class Board:
         self.buildable_edges_cache = {}  # Reset buildable_edges
         self.player_port_resources_cache = {}  # Reset port resources
         return previous_road_color, self.road_color, self.road_lengths
+
+    def _recompute_longest_road_owner(self, previous_road_color):
+        max_length = max(self.road_lengths.values(), default=0)
+        self.road_length = max_length
+
+        if max_length < 5:
+            self.road_color = None
+            return
+
+        contenders = [
+            color for color, length in self.road_lengths.items() if length == max_length
+        ]
+        if previous_road_color in contenders:
+            self.road_color = previous_road_color
+        elif len(contenders) == 1:
+            self.road_color = contenders[0]
+        else:
+            self.road_color = None
 
     def dfs_walk(self, node_id, color):
         """Generates set of nodes that are "connected" to given node.
