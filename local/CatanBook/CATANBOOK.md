@@ -9,6 +9,7 @@ Operational notes for the `MiddleLizardAi/catanatron-ai` fork. This file is the 
 - Previous fork remote: `dedli8 = git@github.com:dedli8/catanatron-ai.git`
 - Upstream remote: `upstream = https://github.com/bcollazo/catanatron.git`
 - Upstream push is disabled.
+- `origin` is a public fork (`MiddleLizardAi/catanatron-ai`). GitHub does not allow simply flipping this fork to private in the normal way; make a new standalone private repo in `MiddleLizardAi`, push the current branch there, then switch `origin` if private work is needed.
 - Keep `.idea/` untracked unless the user explicitly asks to commit IDE files.
 
 ## Local Runtime
@@ -89,6 +90,8 @@ Relevant files:
 The PNG assets are intentionally committed even though they are larger than the previous SVGs. `vite build` warns that some chunks are larger than 500 kB.
 
 As of 2026-05-21 the active feature branch is `feature/playable-multiplayer-codex`. The working tree contains uncommitted multiplayer, webhook-strategy, and UI visual changes. Future sessions must run `git status --short --branch` first and must not revert unrelated user work.
+
+As of 2026-06-09, the active branch is still `feature/playable-multiplayer-codex`; latest pushed commit is `24e7262 Fix longest road and stale action handling`. That commit fixes Longest Road scoring for short road networks and adds stale-action protection across the API and UI. Future sessions should still start with `git status --short --branch` because local docs/reports may be uncommitted.
 
 ## UI Notes
 
@@ -284,7 +287,7 @@ Current implementation status:
 - The API accepts 2 to 4 players and player-object payloads.
 - No tokenized join links yet.
 - No server-side player authorization yet.
-- No stale-state precondition yet. Race handling is best-effort: the UI refreshes latest state if action submission fails.
+- Stale-action protection exists: action submissions include the acting `state_index`, and the API rejects mismatches with `stale_action` instead of applying an action to a newer state. The UI refreshes latest state after stale failures.
 - Domestic trade has backend state transitions but no real UI workflow. `OFFER_TRADE` is also not emitted by `generate_playable_actions()`, so webhook bots will not initiate domestic trades from `legal_actions`.
 - Robber victim choice is incomplete in the UI: tile click chooses the first matching `MOVE_ROBBER` action for that coordinate, so a tile with multiple possible victims needs a victim selector.
 
@@ -325,6 +328,8 @@ python3 -u local/codex_adapter/codex_webhook.py \
 ```
 
 Use `http://host.docker.internal:8787/decide` for the `WEBHOOK` player URL.
+
+Adapter health check note: `GET /decide` returning HTTP `501` is normal and means the endpoint is reachable; decisions are made through POST requests from the Catanatron server.
 
 Fast local game with one human, one Codex webhook, and one Catanatron:
 
@@ -433,6 +438,8 @@ Local adapter files:
 - Use maritime trades to complete settlement/city/development plans, especially under discard pressure.
 - Buy development cards under caps so it does not spam unplayed tactical cards.
 - Treat 8+ actual VP as endgame and bias toward shortest path to 10 VP.
+- Defend against a human/Catanatron leader taking Longest Road when a defensive road keeps Codex within reach.
+- Hold enough settlement pieces for city-first finishes when upgrading every settlement would leave no expansion route.
 - Use Catanatron's own depth-2 `AlphaBetaPlayer` as the primary decision source. `WebHookPlayer._strategy_to_json()` sends `strategy.catanatron_search.recommended_action` plus scored candidates; the adapter chooses that action first when `catanatron_search.enabled` is true. Local heuristic scores are now diagnostics/fallback/optional guardrails, not the main live policy.
 - Use Catanatron's one-ply `base_fn` teacher only as a fallback correction when full search is unavailable.
 
@@ -445,7 +452,9 @@ Current checked strategies:
 - Previous live experiment, `search_first_catan_v8_committed_road_override`: starts from v7 and adds a narrow road override when AlphaBeta abandons a committed route and Codex road scoring sees a much stronger continuation to a 3-hex settlement target. Regression checked on live game `fafd1e2a-28f9-41aa-b5b3-103ee31433b5`: state `113` still keeps AlphaBeta road `[1,6]`; state `140` overrides AlphaBeta road `[7,24]` to `[0,1]`.
 - Previous live patch, `search_first_catan_v9_safe_robber`: keeps v8 road behavior and prevents AlphaBeta from overriding local robber scoring. Robber selection filters out self-blocking tiles when an opponent-only alternative exists. Regression checked on live game `462985ea-458b-4315-a376-4c9ad7978293`: state `20` changes from AlphaBeta `MOVE_ROBBER [[-1,0,1], "ORANGE"]` on a `6 ORE` tile containing `ORANGE+BLUE` to safe local `MOVE_ROBBER [[1,-2,1], "RED"]`.
 - High-win but road-heavy patch, `search_first_catan_v10_tempo_defense`: added opening-road, city-target, anti-stall maritime trade, army-defense, and leader-threat robber overrides. 50-game eval against weighted human proxy and Catanatron: Codex `32/50` wins, `64%`, avg VP `8.54`, avg roads `10.6`, avg settlements `2.54`, avg cities `2.3`, avg dev cards bought `0.62`, fallback decisions `0`. Report: `local/codex_adapter/reports/evaluations/three_player_eval_20260522_125955.md`. Interpretation: strong win-rate, but still too road-heavy for live human review; 18/50 games reached 12+ Codex roads.
-- Current live profile, `search_first_catan_v12_guarded_expansion`: keeps the v10 tempo/defense overrides and enables search guardrails. Expansion roads are allowed, but dead roads and road-debt roads are vetoed when they do not leave Codex close to a settlement. 50-game eval against weighted human proxy and Catanatron: Codex `27/50` wins, `54%`, avg VP `8.68`, avg roads `6.6`, avg settlements `1.86`, avg cities `2.84`, avg dev cards bought `1.82`, fallback decisions `0`. Report: `local/codex_adapter/reports/evaluations/three_player_eval_20260522_135109.md`. Interpretation: lower raw win-rate than v10, but much closer to the desired live style; only `1/50` games reached 12+ Codex roads and no loss had 12+ Codex roads.
+- Previous live profile, `search_first_catan_v12_guarded_expansion`: keeps the v10 tempo/defense overrides and enables search guardrails. Expansion roads are allowed, but dead roads and road-debt roads are vetoed when they do not leave Codex close to a settlement. 50-game eval against weighted human proxy and Catanatron: Codex `27/50` wins, `54%`, avg VP `8.68`, avg roads `6.6`, avg settlements `1.86`, avg cities `2.84`, avg dev cards bought `1.82`, fallback decisions `0`. Report: `local/codex_adapter/reports/evaluations/three_player_eval_20260522_135109.md`. Interpretation: lower raw win-rate than v10, but much closer to the desired live style; only `1/50` games reached 12+ Codex roads and no loss had 12+ Codex roads.
+- Previous live profile, `search_first_catan_v13_finish_threat`: adds a finish/threat layer on top of v12. At 8+ VP it protects immediate city/settlement VP, trades only into direct VP plans, tightens roads at 9+ VP, and buys/plays development cards when they provide late-game outs or block a visible leader threat. 20-game sanity eval on seeds `1-20`: Codex `10/20` wins, `50%`, avg VP `8.05`, avg roads `6.0`, avg settlements `1.4`, avg cities `2.75`, avg dev cards bought `1.85`, fallback decisions `0`. Report: `local/codex_adapter/reports/evaluations/three_player_eval_20260525_200239.md`. Same first-20 slice from v12 was `8/20`, avg VP `7.85`, avg roads `5.85`, avg dev cards `1.55`; v13 improves this slice but still needs a full 50-game check before treating it as strictly stronger overall.
+- Current live profile, `search_first_catan_v15_human_finish_guard`: search-first base-Catan strategy with Codex guardrails for expansion quality, finish/threat play, human-leader defense, Longest Road defense, stricter settlement reserve before final city upgrades, and safe robber moves. It is the active `local/codex_adapter/strategy.json` profile as of 2026-06-09. It needs a fresh fixed-seed evaluation report before treating it as proven stronger than v13/v12.
 
 Training/report workflow:
 
@@ -519,7 +528,7 @@ Highest-impact product gaps:
 4. WEBHOOK option in the new-game UI, including URL/name fields.
 5. Domestic trade UI and webhook initiation support.
 6. Robber victim selector when multiple victims touch the selected tile.
-7. Decision logging for Codex training.
+7. Decision logging for Codex training. The adapter supports `--decision-log`; persistent server-side decision storage is still missing.
 8. API support for game seed and number placement.
 9. Backend dev/test dependencies in Docker or a dedicated test image.
 10. Fix `ui/src/App.test.tsx` to match the new multi-human home page.
@@ -528,7 +537,7 @@ Highest-impact product gaps:
 
 1. Keep Git flow clean: one feature branch per task, push to `origin`.
 2. Stabilize the current multi-human and webhook branch.
-3. Add server-side join identity and stale-state checks.
+3. Add server-side join identity. Stale-state checks already exist and should be preserved.
 4. Add fair state filtering for humans and Codex bots.
 5. Add decision logging and fixed-seed evaluation.
 6. Finish UI visual improvements from the friend's repo only where they fit the current codebase.
