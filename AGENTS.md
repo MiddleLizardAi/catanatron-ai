@@ -1,3 +1,8 @@
-Дивись `local/CatanBook/CATANBOOK.md` як вхідну точку в проект.
+Lizard/Codex entrypoint for this product repo:
 
-Зміни, які ми вносимо в цьому проекті, треба комітити окремими логічними комітами і пушити, якщо користувач не сказав залишити їх локально.
+1. Read `/Users/dmytrolitovskyi/PhpstormProjects/CareOfficeWeb/claude/local/MiddleLizardAI/LIZARDBOOK.md`.
+2. Then read `/Users/dmytrolitovskyi/PhpstormProjects/CareOfficeWeb/claude/local/MiddleLizardAI/projects/Catanotron/PROJECTBOOK.md`.
+
+Keep this repository focused on Catanotron product/runtime changes. Project
+knowledge lives in MiddleLizard. Codex Catan-playing strategy and profiles live
+in `/Users/dmytrolitovskyi/PhpstormProjects/catanotron-codex-skill`.
